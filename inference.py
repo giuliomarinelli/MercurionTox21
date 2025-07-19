@@ -19,6 +19,13 @@ TOP4_INDICES = [ALL_LABELS.index(label) for label in TOP4_LABELS]
 
 with open("public.pem", "r") as f:
     PUBLIC_KEY = f.read()
+    
+with open("outputs/best_threshold.json", "r") as f:
+    BEST_THRESHOLD = json.load(f)["best_threshold"]
+    
+with open("outputs/best_thresholds.json", "r") as f:
+    PER_LABEL_THRESHOLDS = json.load(f)["per_label_thresholds"]
+
 
 ALGORITHM = "RS256"
 
@@ -50,7 +57,20 @@ def predict(smiles, model, device):
         output = model(tensor)
         probs = torch.sigmoid(output).cpu().numpy().flatten()
         top4_probs = [float(probs[i]) for i in TOP4_INDICES]
-    return dict(zip(TOP4_LABELS, top4_probs))
+
+    # Crea output con soglia per-label
+    results = {}
+    for i, label in enumerate(TOP4_LABELS):
+        prob = top4_probs[i]
+        threshold = PER_LABEL_THRESHOLDS[label]
+        is_positive = prob > threshold
+        results[label] = {
+            "probability": prob,
+            "is_positive": is_positive,
+            "threshold": threshold  # Optional: info trasparente
+        }
+    return results
+
 
 # ✔️ Main NATS client
 async def run():

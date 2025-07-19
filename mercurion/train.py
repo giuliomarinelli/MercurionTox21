@@ -5,6 +5,16 @@ from torch.utils.data import DataLoader, TensorDataset
 from mercurion.model import MercurionMLP
 from mercurion.early_stopping import EarlyStopping
 from mercurion.focal_loss import FocalLoss
+import json
+import random
+
+SEED = 42
+
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 
 
@@ -99,6 +109,18 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
                     best_thresh = t
             return best_thresh, best_f1
 
+        top4_labels = ['SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53']
+        per_label_thresholds = {}
+        
+        for i, label in enumerate(top4_labels):
+            bt, _ = find_best_threshold(all_targets[:, i], all_probs[:, i])
+            per_label_thresholds[label] = bt
+        
+        print("Threshold per label:", per_label_thresholds)
+        with open("outputs/best_thresholds.json", "w") as f:
+            json.dump({"per_label_thresholds": per_label_thresholds}, f, indent=2)
+
+
         best_thresh, best_f1_macro = find_best_threshold(all_targets, all_probs)
         all_bin = (all_probs > best_thresh).astype(int)
 
@@ -111,6 +133,10 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
         if early_stopper.early_stop:
             print("🛑 Stopping early")
             break
+
+    with open('outputs/best_threshold.json', 'w') as f:
+        json.dump({'best_threshold': float(best_thresh)}, f)
+    print(f"📄 Best common threshold saved in outputs/best_threshold.json: {best_thresh:.3f}")
 
 if __name__ == "__main__":
     train_model(epochs=100)
