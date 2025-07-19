@@ -26,6 +26,7 @@ def verify_jwt(token: str):
     try:
         payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
         return payload  # Puoi anche restituire solo alcune claim se vuoi
+    
     except JWTError as e:
         return None
 
@@ -63,7 +64,10 @@ async def run():
 
     async def message_handler(msg):
         try:
-            req = InferenceRequest.parse_raw(msg.data.decode())
+            raw = msg.data.decode()
+            obj = json.loads(raw)
+            payload = obj['data'] if 'data' in obj else obj 
+            req = InferenceRequest.model_validate(payload)
         except ValidationError as e:
             await msg.respond(json.dumps({"error": f"Invalid request: {e.errors()}"}).encode())
             return
@@ -79,8 +83,8 @@ async def run():
 
 
 
-    await nc.subscribe("inference.smiles", cb=message_handler)
-    print("✅ Microservizio in ascolto su 'inference.smiles'...")
+    await nc.subscribe("inference.tox21.smiles", cb=message_handler)
+    print("✅ Microservizio in ascolto su 'inference.tox21.smiles'...")
 
     while True:
         await asyncio.sleep(1)
