@@ -32,7 +32,7 @@ ALGORITHM = "RS256"
 def verify_jwt(token: str):
     try:
         payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
-        return payload  # Puoi anche restituire solo alcune claim se vuoi
+        return payload  
     
     except JWTError as e:
         return None
@@ -67,7 +67,7 @@ def predict(smiles, model, device):
         results[label] = {
             "probability": prob,
             "is_positive": is_positive,
-            "threshold": threshold  # Optional: info trasparente
+            "threshold": threshold 
         }
     return results
 
