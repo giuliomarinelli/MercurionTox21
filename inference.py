@@ -31,10 +31,10 @@ ALGORITHM = "RS256"
 
 def verify_jwt(token: str):
     try:
-        payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM], audience='mercurion-api')
         return payload  
     
-    except JWTError as e:
+    except JWTError:
         return None
 
 # ✔️ Preprocessing SMILES → fingerprint
