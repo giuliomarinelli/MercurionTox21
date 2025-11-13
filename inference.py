@@ -86,21 +86,21 @@ async def run():
         try:
             raw = msg.data.decode()
             obj = json.loads(raw)
-            payload = obj['data'] if 'data' in obj else obj 
+            payload = obj['data'] if 'data' in obj else obj
             req = InferenceRequest.model_validate(payload)
+
+            user_payload = verify_jwt(req.accessToken)
+            if not user_payload:
+                await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
+                return
+
+            result = predict(req.smiles, model, device)
+            await msg.respond(json.dumps(result).encode())
+
         except ValidationError as e:
             await msg.respond(json.dumps({"error": f"Invalid request: {e.errors()}"}).encode())
-            return
-
-        # 🔐 Validazione token
-        user_payload = verify_jwt(req.accessToken)
-        if not user_payload:
-            await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
-            return
-
-        result = predict(req.smiles, model, device)
-        await msg.respond(json.dumps(result).encode())
-
+        except Exception as e:
+            await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
 
     await nc.subscribe("inference.tox21.smiles", cb=message_handler)
