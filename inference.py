@@ -11,6 +11,12 @@ from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
 from jose import jwt, JWTError
 
+# 🔐 Hardening CPU: limitiamo i thread Torch ad 1 per evitare oversubscription
+torch.set_num_threads(1)
+try:
+    torch.set_num_interop_threads(1) # Non tutte le versioni di torch hanno questa API
+except (AttributeError, TypeError):
+    pass
 
 # ✔️ Label e indice: definiti una sola volta, in ordine
 ALL_LABELS = tox21_labels
