@@ -10,6 +10,7 @@ import json
 from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
 from jose import jwt, JWTError
+import os
 
 # 🔐 Hardening CPU: limitiamo i thread Torch ad 1 per evitare oversubscription
 torch.set_num_threads(1)
@@ -32,6 +33,7 @@ with open("outputs/best_threshold.json", "r") as f:
 with open("outputs/best_thresholds.json", "r") as f:
     PER_LABEL_THRESHOLDS = json.load(f)["per_label_thresholds"]
 
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4223")
 
 ALGORITHM = "RS256"
 
@@ -81,7 +83,7 @@ def predict(smiles, model, device):
 # ✔️ Main NATS client
 async def run():
     nc = NATS()
-    await nc.connect("nats://localhost:4223")
+    await nc.connect(NATS_URL)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MercurionMLP().to(device)
