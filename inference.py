@@ -35,6 +35,8 @@ with open("outputs/best_thresholds.json", "r") as f:
 
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4223")
 
+
+
 ALGORITHM = "RS256"
 
 def verify_jwt(token: str):
@@ -110,9 +112,12 @@ async def run():
         except Exception as e:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
+    nats_namespace = "inference.tox21.smiles"
 
-    await nc.subscribe("inference.tox21.smiles", cb=message_handler)
-    print("✅ Microservizio in ascolto su 'inference.tox21.smiles'...")
+    await nc.subscribe(nats_namespace, cb=message_handler)
+    print(f"[MercurionTox21 > inference] Device: {device.upper()}")
+    print(f"[MercurionTox21 > inference] NATS url: {NATS_URL}")
+    print(f"[MercurionTox21 > inference] ✅ Microservice subscribed on '{nats_namespace}'...")
 
     while True:
         await asyncio.sleep(1)

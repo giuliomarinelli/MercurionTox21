@@ -1,0 +1,15 @@
+services:
+  mercurion_tox_21:
+    container_name: mercurion_tox_21
+    build:
+      context: ../
+      dockerfile: Dockerfile.test
+    restart: unless-stopped
+    networks:
+      - spectralume_network
+    environment:
+      NATS_URL: nats://nats_sl:4222
+networks:
+  spectralume_network:
+    external: true
+      
