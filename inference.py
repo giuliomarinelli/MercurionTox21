@@ -24,7 +24,14 @@ ALL_LABELS = tox21_labels
 TOP4_LABELS = ['SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53']
 TOP4_INDICES = [ALL_LABELS.index(label) for label in TOP4_LABELS]
 
-with open("public.pem", "r") as f:
+ENV = os.getenv('PY_ENV', 'development')
+
+if ENV != 'production':
+    PUBLIC_KEY_FILE_NAME = f"public.{ENV}.pem"
+else:
+    PUBLIC_KEY_FILE_NAME = "public.pem"
+
+with open(PUBLIC_KEY_FILE_NAME, "r") as f:
     PUBLIC_KEY = f.read()
     
 with open("outputs/best_threshold.json", "r") as f:
@@ -115,6 +122,7 @@ async def run():
     nats_namespace = "inference.tox21.smiles"
 
     await nc.subscribe(nats_namespace, cb=message_handler)
+    print(f"[MercurionTox21 > inference] Environment: {ENV.upper()}")
     print(f"[MercurionTox21 > inference] Device: {device.upper()}")
     print(f"[MercurionTox21 > inference] NATS url: {NATS_URL}")
     print(f"[MercurionTox21 > inference] ✅ Microservice subscribed on '{nats_namespace}'...")

@@ -9,6 +9,7 @@ services:
       - spectralume_network
     environment:
       NATS_URL: nats://nats_sl:4222
+      PY_ENV: test
 networks:
   spectralume_network:
     external: true
