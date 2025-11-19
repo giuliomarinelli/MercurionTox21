@@ -119,7 +119,10 @@ async def run():
         except Exception as e:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
-    nats_namespace = "inference.tox21.smiles"
+    if ENV != 'production':
+        nats_namespace = f"{ENV}.inference.tox21.smiles"
+    else:
+        nats_namespace = "inference.tox21.smiles"
 
     await nc.subscribe(nats_namespace, cb=message_handler)
     print(f"[MercurionTox21 > inference] Environment: {ENV.upper()}")
