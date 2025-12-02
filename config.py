@@ -30,3 +30,6 @@ def get_config() -> Configuration:
         print(f"FATAL: invalid configuration\n{e}", file=sys.stderr)
         sys.exit(1)
         
+if __name__ == '__main__':
+    print(get_config())
+        

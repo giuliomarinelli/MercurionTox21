@@ -29,11 +29,10 @@ TOP4_INDICES = [ALL_LABELS.index(label) for label in TOP4_LABELS]
 
 config = get_config()
 
-env = config.get('py_env', 'development')
-nats_url = config.get("nats_url", "nats://localhost:4223")
-version = config.get('version', 'unknown')
+env = config.py_env or "development"
+nats_url = config.nats_url or "nats://localhost:4223"
+version = config.version or "unknown"
 
-print(f"CONFIG = {config}")
 
 if env != 'production':
     PUBLIC_KEY_FILE_NAME = f"public.{env}.pem"
@@ -48,10 +47,6 @@ with open("outputs/best_threshold.json", "r") as f:
     
 with open("outputs/best_thresholds.json", "r") as f:
     PER_LABEL_THRESHOLDS = json.load(f)["per_label_thresholds"]
-
-NATS_URL = os.getenv("NATS_URL", "nats://localhost:4223")
-
-
 
 ALGORITHM = "RS256"
 
@@ -101,7 +96,7 @@ def predict(smiles, model, device):
 # ✔️ Main NATS client
 async def run():
     nc = NATS()
-    await nc.connect(NATS_URL)
+    await nc.connect(nats_url)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MercurionMLP().to(device)
@@ -136,7 +131,8 @@ async def run():
     await nc.subscribe(nats_namespace, cb=message_handler)
     print(f"[MercurionTox21 > inference] Environment: {env.upper()}")
     print(f"[MercurionTox21 > inference] Device: {device.upper()}")
-    print(f"[MercurionTox21 > inference] NATS url: {NATS_URL}")
+    print(f"[MercurionTox21 > inference] NATS url: {nats_url}")
+    print(f"[MercurionTox21 > inference] Version: {version}")
     print(f"[MercurionTox21 > inference] ✅ Microservice subscribed on '{nats_namespace}'...")
 
     while True:
