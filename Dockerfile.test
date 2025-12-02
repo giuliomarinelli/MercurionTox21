@@ -1,6 +1,6 @@
 # Dockerfile.test per MercurionTox21
 
-FROM python:3.9.13-slim AS test
+FROM python:3.10.11-slim AS test
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1

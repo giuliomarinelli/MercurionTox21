@@ -25,6 +25,7 @@ class InferenceRequest(BaseModel):
     accessToken: TokenStr
     model_config = ConfigDict(extra="forbid")  # blocca campi extra nel payload
     
-class Configuration(BaseModel):
+class Configuration(BaseModel): # TODO: implementazre validazione
+    py_env: str
     nats_url: str
     version: str
