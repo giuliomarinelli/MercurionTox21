@@ -2,6 +2,7 @@ import asyncio
 import torch
 import numpy as np
 from nats.aio.client import Client as NATS
+from config import get_config
 from mercurion.model import MercurionMLP
 from mercurion.labels import tox21_labels
 from rdkit import Chem
@@ -24,10 +25,17 @@ ALL_LABELS = tox21_labels
 TOP4_LABELS = ['SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53']
 TOP4_INDICES = [ALL_LABELS.index(label) for label in TOP4_LABELS]
 
-ENV = os.getenv('PY_ENV', 'development')
+# ENV = os.getenv('PY_ENV', 'development')
 
-if ENV != 'production':
-    PUBLIC_KEY_FILE_NAME = f"public.{ENV}.pem"
+config = get_config()
+
+env = config.py_env or "development"
+nats_url = config.nats_url or "nats://localhost:4223"
+version = config.version or "unknown"
+
+
+if env != 'production':
+    PUBLIC_KEY_FILE_NAME = f"public.{env}.pem"
 else:
     PUBLIC_KEY_FILE_NAME = "public.pem"
 
@@ -39,10 +47,6 @@ with open("outputs/best_threshold.json", "r") as f:
     
 with open("outputs/best_thresholds.json", "r") as f:
     PER_LABEL_THRESHOLDS = json.load(f)["per_label_thresholds"]
-
-NATS_URL = os.getenv("NATS_URL", "nats://localhost:4223")
-
-
 
 ALGORITHM = "RS256"
 
@@ -92,7 +96,7 @@ def predict(smiles, model, device):
 # ✔️ Main NATS client
 async def run():
     nc = NATS()
-    await nc.connect(NATS_URL)
+    await nc.connect(nats_url)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MercurionMLP().to(device)
@@ -119,15 +123,16 @@ async def run():
         except Exception as e:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
-    if ENV != 'production':
-        nats_namespace = f"{ENV}.inference.tox21.smiles"
+    if env != 'production':
+        nats_namespace = f"{env}.inference.tox21.smiles"
     else:
         nats_namespace = "inference.tox21.smiles"
 
     await nc.subscribe(nats_namespace, cb=message_handler)
-    print(f"[MercurionTox21 > inference] Environment: {ENV.upper()}")
+    print(f"[MercurionTox21 > inference] Environment: {env.upper()}")
     print(f"[MercurionTox21 > inference] Device: {device.upper()}")
-    print(f"[MercurionTox21 > inference] NATS url: {NATS_URL}")
+    print(f"[MercurionTox21 > inference] NATS url: {nats_url}")
+    print(f"[MercurionTox21 > inference] Version: {version}")
     print(f"[MercurionTox21 > inference] ✅ Microservice subscribed on '{nats_namespace}'...")
 
     while True:
