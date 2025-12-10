@@ -1,17 +1,14 @@
 import asyncio
-import torch
-import numpy as np
+import torch    
 from nats.aio.client import Client as NATS
 from api.inference import predict
+from api.rdkit import get_molecule_properties, to_canonical_smiles, are_same_structure
 from config import get_config
 from mercurion.model import MercurionMLP
 import json
 from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
 from jose import jwt, JWTError
-
-# rdkit_api functional module
-from api.rdkit import get_molecule_properties, to_canonical_smiles, are_same_structure
 
 
 # 🔐 Hardening CPU: limitiamo i thread Torch ad 1 per evitare oversubscription
