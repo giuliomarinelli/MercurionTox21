@@ -9,7 +9,10 @@ import json
 from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
 from jose import jwt, JWTError
+from time import time_ns
 
+start_ns = time_ns()
+print('[MercurionTox21 > main] Starting application...')
 
 # 🔐 Hardening CPU: limitiamo i thread Torch ad 1 per evitare oversubscription
 torch.set_num_threads(1)
@@ -186,7 +189,12 @@ async def run():
     await nc.subscribe(nats_rdkit_props_ns, cb=rdkit_props_cb)
     await nc.subscribe(nats_rdkit_canon_ns, cb=rdkit_canon_cb)
     await nc.subscribe(nats_rdkit_same_ns, cb=rdkit_same_cb)
+    
+    stop_ns = time_ns()
+    diff_ms = (stop_ns - start_ns) / 1000000
 
+    
+    print(f"[MercurionTox21 > main] Application started in: {diff_ms}ms")
     print(f"[MercurionTox21 > main] Environment: {env.upper()}")
     print(f"[MercurionTox21 > main] Device: {device.upper()}")
     print(f"[MercurionTox21 > main] NATS url: {nats_url}")
