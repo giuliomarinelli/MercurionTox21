@@ -10,6 +10,7 @@ from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
 from jose import jwt, JWTError
 from time import time_ns
+import sys
 
 start_ns = time_ns()
 print('[MercurionTox21 > main] Starting application...')
@@ -27,13 +28,17 @@ env = config.py_env or "development"
 nats_url = config.nats_url or "nats://localhost:4223"
 version = config.version or "unknown"
 
-if env != 'production':
-    PUBLIC_KEY_FILE_NAME = f"public.{env}.pem"
-else:
-    PUBLIC_KEY_FILE_NAME = "public.pem"
-
-with open(PUBLIC_KEY_FILE_NAME, "r") as f:
-    PUBLIC_KEY = f.read()
+try:
+    with open(config.jwt_public_key_path, "r") as f:
+        PUBLIC_KEY = f.read()
+except OSError as e:
+    print(
+        f"[MercurionTox21 > main] FATAL: unable to read JWT public key file "
+        f"'{config.jwt_public_key_path}': {e}",
+        file=sys.stderr,
+    )
+    print("\n[MercurionTox21 > main] Python process terminated with exit_code = 1\n")
+    sys.exit(1)
 
 ALGORITHM = "RS256"
 
