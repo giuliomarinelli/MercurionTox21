@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+##############################
+# 1) Builder
+##############################
+FROM python:3.10.11-slim AS builder
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/python -m pip install --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+
+##############################
+# 2) Runtime
+##############################
+FROM python:3.10.11-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+# Utente non-root
+RUN addgroup --system app && adduser --system --ingroup app app
+
+RUN rm -rf /var/lib/apt/lists/*
+
+# Copiamo la venv già popolata dal builder
+COPY --from=builder /opt/venv /opt/venv
+
+COPY . .
+
+USER app
+
+CMD ["python", "-m", "main"]
