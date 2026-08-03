@@ -8,7 +8,8 @@ from mercurion.model import MercurionMLP
 import json
 from schemas.schemas import InferenceRequest
 from pydantic import ValidationError
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError
 from time import time_ns
 import sys
 
@@ -52,7 +53,7 @@ def verify_jwt(token: str):
             audience='mercurion-api'
         )
         return payload
-    except JWTError:
+    except PyJWTError:
         return None
 
 

@@ -45,7 +45,13 @@ def plot_roc_curves(model, X_test, y_test, save_dir='outputs/roc_curves'):
 
 if __name__ == "__main__":
     model = MercurionMLP()
-    model.load_state_dict(torch.load("outputs/models/best_model.pt", map_location='cpu'))
+    model.load_state_dict(
+        torch.load(
+            "outputs/models/best_model.pt",
+            map_location="cpu",
+            weights_only=True,
+        )
+    )
 
     X_test_tensor, y_test_np = load_test_data()
     plot_roc_curves(model, X_test_tensor, y_test_np)

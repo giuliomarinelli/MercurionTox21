@@ -29,7 +29,13 @@ def evaluate_auc_per_label(model, X_test, y_test):
 
 if __name__ == "__main__":
     model = MercurionMLP()
-    model.load_state_dict(torch.load("outputs/models/best_model.pt", map_location='cpu'))
+    model.load_state_dict(
+        torch.load(
+            "outputs/models/best_model.pt",
+            map_location="cpu",
+            weights_only=True,
+        )
+    )
 
     X_test_tensor, y_test_np = load_test_data()
     auc_scores = evaluate_auc_per_label(model, X_test_tensor, y_test_np)
