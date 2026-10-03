@@ -1,9 +1,13 @@
+import asyncio
+import threading
 import json
 from pathlib import Path
 import runpy
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
+from api.pcp import CompoundNotFoundError
+from api.rdkit import InvalidSmilesError
 
 
 TOKEN = "test-access-token"
@@ -28,7 +32,10 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             "config": SimpleNamespace(get_config=lambda: config),
             "torch": Mock(),
             "api.inference": SimpleNamespace(predict=Mock(return_value={"prediction": 1})),
-            "api.pcp": SimpleNamespace(get_iupac_name_from_smiles=Mock(return_value="ethanol")),
+            "api.pcp": SimpleNamespace(
+                CompoundNotFoundError=CompoundNotFoundError,
+                get_iupac_name_from_smiles=Mock(return_value="ethanol"),
+            ),
             "mercurion.model": SimpleNamespace(MercurionMLP=Mock()),
         }
         real_open = open
@@ -40,8 +47,9 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict("sys.modules", dependencies), patch("builtins.open", test_open), patch("builtins.print"):
             module = runpy.run_path(str(ROOT / "main.py"), run_name="nats_validation_test")
+        cls.runtime = module["run"].__globals__
         cls.run_service = staticmethod(module["run"])
-        cls.runtime = cls.run_service.__globals__
+        cls.real_verify_jwt = staticmethod(module["verify_jwt"])
         cls.default_skip_auth = module["GLOBAL_SKIP_AUTH_FLAG"]
 
     async def asyncSetUp(self):
@@ -76,6 +84,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
     async def request(self, subject, payload=None, raw=None):
         msg = SimpleNamespace(
             data=raw if raw is not None else json.dumps(payload).encode(),
+            reply="_INBOX.test",
             respond=AsyncMock(),
         )
         await self.callbacks[subject](msg)
@@ -88,7 +97,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             "rdkit_api.get_molecule_properties": {"smiles": "CCO", "accessToken": TOKEN},
             "rdkit_api.to_canonical_smiles": {"smiles": "CCO", "accessToken": TOKEN},
             "rdkit_api.are_same_structure": {"a": "CCO", "b": "OCC", "accessToken": TOKEN},
-            "rdkit_api.get_iupac_name_from_smiles": {"smiles": "CCO", "accessToken": TOKEN},
+            "pcp_api.get_iupac_name_from_smiles": {"smiles": "CCO", "accessToken": TOKEN},
         }
 
     async def test_valid_requests_accept_direct_and_nest_enveloped_payloads(self):
@@ -225,6 +234,80 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
                 response = await self.request(subject, payload)
                 self.assertTrue(response["error"].startswith("Invalid request:"))
         self.verify_jwt.assert_not_called()
+
+    async def test_jwt_verifier_rejects_missing_token_or_key_without_decoding(self):
+        # Test the real verifier, independently of callback authentication mocks.
+        # asyncSetUp patches the verifier, so use the original saved at startup.
+        verify = self.real_verify_jwt
+        with patch.object(self.runtime["jwt"], "decode") as decode:
+            self.assertIsNone(verify(None))
+            self.assertIsNone(verify(TOKEN))
+            decode.assert_not_called()
+            with patch.dict(self.runtime, {"PUBLIC_KEY": "test-public-key"}):
+                self.assertIsNone(verify(None))
+                decode.assert_not_called()
+                decode.return_value = {"sub": "test-user"}
+                self.assertEqual(verify(TOKEN), {"sub": "test-user"})
+                decode.assert_called_once_with(
+                    TOKEN, "test-public-key", algorithms=["RS256"], audience="mercurion-api"
+                )
+
+    async def test_pubsub_without_reply_does_not_attempt_response(self):
+        self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        for subject, valid in self.valid_requests().items():
+            without_token = {key: value for key, value in valid.items() if key != "accessToken"}
+            for raw in (json.dumps(without_token).encode(), b"{", b"{}"):
+                with self.subTest(subject=subject, raw=raw):
+                    msg = SimpleNamespace(data=raw, reply="", respond=AsyncMock())
+                    await self.callbacks[subject](msg)
+                    msg.respond.assert_not_awaited()
+        self.verify_jwt.assert_not_called()
+
+    async def test_invalid_chemical_smiles_are_request_errors(self):
+        for subject, operation in (
+            ("rdkit_api.get_molecule_properties", self.properties),
+            ("rdkit_api.to_canonical_smiles", self.canonical),
+            ("pcp_api.get_iupac_name_from_smiles", self.iupac),
+        ):
+            operation.side_effect = InvalidSmilesError("invalid")
+            response = await self.request(subject, {"smiles": "invalid", "accessToken": TOKEN})
+            self.assertEqual(response, {"error": "Invalid SMILES"})
+
+    async def test_pubchem_not_found_is_distinct_from_invalid_smiles(self):
+        self.iupac.side_effect = CompoundNotFoundError("not found")
+        response = await self.request(
+            "pcp_api.get_iupac_name_from_smiles", {"smiles": "CCO", "accessToken": TOKEN}
+        )
+        self.assertEqual(response, {"error": "Compound not found in PubChem"})
+
+    async def test_pubchem_lookup_does_not_block_event_loop(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        def lookup(smiles):
+            started.set()
+            if not release.wait(timeout=3):
+                raise TimeoutError("test lookup timed out")
+            return "ethanol"
+
+        self.iupac.side_effect = lookup
+        task = asyncio.create_task(self.request(
+            "pcp_api.get_iupac_name_from_smiles", {"smiles": "CCO", "accessToken": TOKEN}
+        ))
+        try:
+            async def wait_for_start():
+                while not started.is_set():
+                    await asyncio.sleep(0.01)
+            await asyncio.wait_for(wait_for_start(), timeout=1)
+            response = await self.request(
+                "rdkit_api.get_molecule_properties", {"smiles": "CCO", "accessToken": TOKEN}
+            )
+            self.assertNotIn("error", response)
+            self.assertFalse(task.done())
+        finally:
+            release.set()
+            result = await task
+        self.assertEqual(result, {"data": {"iupac_name": "ethanol"}})
 
 
 if __name__ == "__main__":

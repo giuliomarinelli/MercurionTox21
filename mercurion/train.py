@@ -1,12 +1,48 @@
+# Load Torch before sklearn's native libraries to avoid Windows DLL conflicts.
+import torch
 from sklearn.metrics import f1_score, roc_auc_score
 import numpy as np
-import torch
 from torch.utils.data import DataLoader, TensorDataset
 from mercurion.model import MercurionMLP
 from mercurion.early_stopping import EarlyStopping
 from mercurion.focal_loss import FocalLoss
+from mercurion.labels import tox21_labels
 import json
 import random
+from typing import Any, Literal, Protocol, cast
+
+
+class _F1Score(Protocol):
+    def __call__(
+        self, y_true: Any, y_pred: Any, *,
+        average: Literal['micro', 'macro'], zero_division: Literal[0],
+    ) -> float: ...
+
+
+# sklearn accepts numeric zero_division; its unannotated default is a string.
+_f1_score = cast(_F1Score, f1_score)
+
+
+def find_best_threshold(y_true, y_probs):
+    thresholds = np.arange(0.1, 0.9, 0.05)
+    best_f1 = 0.0
+    best_thresh = 0.5
+    for t in thresholds:
+        y_pred = (y_probs > t).astype(int)
+        f1 = _f1_score(y_true, y_pred, average='macro', zero_division=0)
+        if f1 > best_f1:
+            best_f1 = f1
+            best_thresh = float(t)
+    return best_thresh, best_f1
+
+
+def find_per_label_thresholds(all_targets, all_probs):
+    thresholds = {}
+    for label in ('SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53'):
+        index = tox21_labels.index(label)
+        threshold, _ = find_best_threshold(all_targets[:, index], all_probs[:, index])
+        thresholds[label] = threshold
+    return thresholds
 
 SEED = 42
 
@@ -39,6 +75,9 @@ def load_data(batch_size=64):
 
 
 def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    if epochs <= 0:
+        raise ValueError("epochs must be greater than zero")
+    best_thresh = 0.5
     print(f"Using device: {device}")
     train_loader, val_loader = load_data()
 
@@ -88,8 +127,8 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
         all_bin = (all_probs > 0.5).astype(int)
 
         # F1 score
-        f1_micro = f1_score(all_targets, all_bin, average='micro', zero_division=0)
-        f1_macro = f1_score(all_targets, all_bin, average='macro', zero_division=0)
+        f1_micro = _f1_score(all_targets, all_bin, average='micro', zero_division=0)
+        f1_macro = _f1_score(all_targets, all_bin, average='macro', zero_division=0)
 
         # ROC-AUC
         try:
@@ -97,24 +136,7 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
         except ValueError:
             roc_auc = float('nan')  # nel caso in cui non ci siano esempi positivi
 
-        def find_best_threshold(y_true, y_probs):
-            thresholds = np.arange(0.1, 0.9, 0.05)
-            best_f1 = 0
-            best_thresh = 0.5
-            for t in thresholds:
-                y_pred = (y_probs > t).astype(int)
-                f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
-                if f1 > best_f1:
-                    best_f1 = f1
-                    best_thresh = t
-            return best_thresh, best_f1
-
-        top4_labels = ['SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53']
-        per_label_thresholds = {}
-        
-        for i, label in enumerate(top4_labels):
-            bt, _ = find_best_threshold(all_targets[:, i], all_probs[:, i])
-            per_label_thresholds[label] = bt
+        per_label_thresholds = find_per_label_thresholds(all_targets, all_probs)
         
         print("Threshold per label:", per_label_thresholds)
         with open("outputs/best_thresholds.json", "w") as f:

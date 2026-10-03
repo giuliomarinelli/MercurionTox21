@@ -24,17 +24,21 @@ def preprocess_tox21(input_csv='data/raw/tox21.csv',
     df = pd.read_csv(input_csv)
 
     df['fingerprint'] = df['smiles'].apply(smiles_to_fingerprint)
-    df = df[df['fingerprint'].notnull()]
+    df = df.dropna(subset=['fingerprint'])
 
-    X = np.stack(df['fingerprint'].values)
-    y = df[tox21_labels].values.astype(np.float32)
+    X = np.stack(df['fingerprint'].to_list())
+    y = df[tox21_labels].to_numpy(dtype=np.float32)
 
     # Prima split train+val vs test
     X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
 
     # Poi split train vs val
     val_relative_size = val_size / (1 - test_size)
-    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=val_relative_size, random_state=random_state)
+    X_train, X_val, y_train, y_val = map(
+        np.asarray,
+        train_test_split(X_temp, y_temp, test_size=val_relative_size, random_state=random_state),
+    )
+    X_test, y_test = np.asarray(X_test), np.asarray(y_test)
 
     os.makedirs(output_dir, exist_ok=True)
 

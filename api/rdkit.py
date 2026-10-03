@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict
+from typing import Callable, Optional, TypeVar, cast
 
 from rdkit import Chem
 from rdkit.Chem import (
     Descriptors,
-    Crippen,
     rdMolDescriptors,
-    Lipinski,
-    AllChem
 )
+
+# RDKit defines MolWt dynamically; annotate this boundary for static analysis.
+_mol_weight = cast(Callable[[Chem.Mol], float], getattr(Descriptors, "MolWt"))
+_DescriptorValue = TypeVar("_DescriptorValue", int, float)
 
 try:
     from rdkit.Chem import inchi
@@ -45,7 +46,7 @@ class MoleculePropertiesDTO:
     psa: Optional[float]
     rtb: Optional[int]
 
-    def to_dict(self) -> Dict[str, Optional[float]]:
+    def to_dict(self) -> dict[str, float | int | None]:
         return asdict(self)
 
 
@@ -77,23 +78,26 @@ def get_molecule_properties(smiles: str) -> MoleculePropertiesDTO:
     """
     mol = _mol_from_smiles(smiles)
 
-    def _safe(fn, default=None):
+    def _safe(fn: Callable[[Chem.Mol], _DescriptorValue]) -> _DescriptorValue | None:
         try:
             return fn(mol)
         except Exception:
-            return default
+            return None
 
-    mw = _safe(Descriptors.MolWt)
+    mw = _safe(_mol_weight)
     if mw is None:
-        mw = _safe(Descriptors.ExactMolWt)
+        mw = _safe(rdMolDescriptors.CalcExactMolWt)
+
+    def _logp(mol: Chem.Mol) -> float:
+        return rdMolDescriptors.CalcCrippenDescriptors(mol)[0]
 
     props = MoleculePropertiesDTO(
         mwFreebase=float(mw) if mw is not None else None,
-        alogp=_safe(Crippen.MolLogP),
+        alogp=_safe(_logp),
         hba=_safe(rdMolDescriptors.CalcNumHBA),
         hbd=_safe(rdMolDescriptors.CalcNumHBD),
         psa=_safe(rdMolDescriptors.CalcTPSA),
-        rtb=_safe(Lipinski.NumRotatableBonds),
+        rtb=_safe(rdMolDescriptors.CalcNumRotatableBonds),
     )
 
     return props
@@ -158,15 +162,14 @@ def get_structure_key(smiles: str) -> str:
     Ordine di preferenza:
     1) InChIKey
     2) InChI
-    3) Morgan fingerprint (bitstring)
-    4) Fallback: canonical SMILES
+    3) Fallback: canonical isomeric SMILES
     """
     mol = _mol_from_smiles(smiles)
 
     # 1) InChIKey
-    if INCHI_AVAILABLE:
+    if INCHI_AVAILABLE and inchi is not None:
         try:
-            key = inchi.MolToInchiKey(mol)  # type: ignore[attr-defined]
+            key = inchi.MolToInchiKey(mol)
             if key and key.strip():
                 return f"INCHIKEY:{key}"
         except Exception:
@@ -174,22 +177,14 @@ def get_structure_key(smiles: str) -> str:
 
         # 2) InChI completo
         try:
-            inchi_str = inchi.MolToInchi(mol)  # type: ignore[attr-defined]
+            inchi_str = inchi.MolToInchi(mol)
             if inchi_str and inchi_str.strip():
                 return f"INCHI:{inchi_str}"
         except Exception:
             pass
 
-    # 3) Morgan FP
-    try:
-        fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
-        fp_str = fp.ToBitString()
-        if fp_str and fp_str.strip("0"):
-            return f"MFP2:{fp_str}"
-    except Exception:
-        pass
-
-    # 4) Fallback: canonical SMILES “semplice”
+    # Fingerprints are not unique structure keys (collisions/stereochemistry).
+    # 3) Fallback: canonical isomeric SMILES
     try:
         can = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
         if can and can.strip():
