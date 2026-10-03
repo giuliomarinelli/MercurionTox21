@@ -1,5 +1,5 @@
 from typing_extensions import Annotated
-from pydantic import BaseModel, StringConstraints, ConfigDict
+from pydantic import BaseModel, StringConstraints, ConfigDict, Field
 
 SmilesStr = Annotated[
     str,
@@ -24,7 +24,32 @@ class InferenceRequest(BaseModel):
     smiles: SmilesStr
     accessToken: TokenStr
     model_config = ConfigDict(extra="forbid")  # blocca campi extra nel payload
-    
+
+
+class RdkitRequest(BaseModel):
+    accessToken: TokenStr
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class MoleculePropertiesRequest(RdkitRequest):
+    smiles: SmilesStr
+
+
+class CanonicalSmilesOptions(BaseModel):
+    isomeric: bool = True
+    kekule: bool = False
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class CanonicalSmilesRequest(MoleculePropertiesRequest):
+    opts: CanonicalSmilesOptions | None = Field(default_factory=CanonicalSmilesOptions)
+
+
+class SameStructureRequest(RdkitRequest):
+    a: SmilesStr
+    b: SmilesStr
+
+
 class Configuration(BaseModel):
     py_env: str
     nats_url: str

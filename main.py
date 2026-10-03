@@ -2,11 +2,23 @@ import asyncio
 import torch    
 from nats.aio.client import Client as NATS
 from api.inference import predict
-from api.rdkit import get_molecule_properties, to_canonical_smiles, are_same_structure
+from api.rdkit import (
+    get_molecule_properties, 
+    to_canonical_smiles, 
+    are_same_structure
+
+)
+from api.pcp import get_iupac_name_from_smiles
 from config import get_config
 from mercurion.model import MercurionMLP
 import json
-from schemas.schemas import InferenceRequest
+from schemas.schemas import (
+    InferenceRequest,
+    MoleculePropertiesRequest,
+    CanonicalSmilesRequest,
+    CanonicalSmilesOptions,
+    SameStructureRequest,
+)
 from pydantic import ValidationError
 import jwt
 from jwt.exceptions import PyJWTError
@@ -63,7 +75,16 @@ def _extract_payload(msg):
     return obj['data'] if isinstance(obj, dict) and 'data' in obj else obj
 
 
-def _rdkit_ns(fn_name: str) -> str:
+async def _respond_invalid_request(msg, error):
+    if isinstance(error, ValidationError):
+        details = error.errors(include_input=False, include_url=False)
+        message = f"Invalid request: {details}"
+    else:
+        message = "Invalid request: malformed JSON or UTF-8"
+    await msg.respond(json.dumps({"error": message}).encode())
+
+
+def _format_ns(fn_name: str) -> str:
     if env != "production":
         return f"{env}.rdkit_api.{fn_name}"
     return f"rdkit_api.{fn_name}"
@@ -101,8 +122,8 @@ async def run():
             result = predict(req.smiles, model, device)
             await msg.respond(json.dumps(result).encode())
 
-        except ValidationError as e:
-            await msg.respond(json.dumps({"error": f"Invalid request: {e.errors()}"}).encode())
+        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            await _respond_invalid_request(msg, e)
         except Exception:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
@@ -112,6 +133,28 @@ async def run():
         nats_inference_ns = "inference.tox21.smiles"
 
     await nc.subscribe(nats_inference_ns, cb=inference_cb)
+    
+    # =========================
+    # PCP CALLBACKS
+    # =========================
+    
+    async def iupac_name_cb(msg):
+            try:
+                payload = _extract_payload(msg)
+                req = MoleculePropertiesRequest.model_validate(payload)
+    
+                user_payload = verify_jwt(req.accessToken)
+                if not user_payload:
+                    await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
+                    return
+    
+                iupac_name = get_iupac_name_from_smiles(req.smiles)
+                await msg.respond(json.dumps({"data": {"iupac_name": iupac_name}}).encode())
+    
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except Exception:
+                await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
     # =========================
     # RDKIT CALLBACKS
@@ -120,81 +163,71 @@ async def run():
     async def rdkit_props_cb(msg):
         try:
             payload = _extract_payload(msg)
+            req = MoleculePropertiesRequest.model_validate(payload)
 
-            access_token = payload.get("accessToken")
-            smiles = payload.get("smiles")
-            if not access_token or not smiles:
-                await msg.respond(json.dumps({"error": "Missing accessToken or smiles"}).encode())
-                return
-
-            user_payload = verify_jwt(access_token)
+            user_payload = verify_jwt(req.accessToken)
             if not user_payload:
                 await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
                 return
 
-            props = get_molecule_properties(smiles).to_dict()
+            props = get_molecule_properties(req.smiles).to_dict()
             await msg.respond(json.dumps({"data": props}).encode())
 
+        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            await _respond_invalid_request(msg, e)
         except Exception:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
     async def rdkit_canon_cb(msg):
         try:
             payload = _extract_payload(msg)
+            req = CanonicalSmilesRequest.model_validate(payload)
+            opts = req.opts or CanonicalSmilesOptions()
 
-            access_token = payload.get("accessToken")
-            smiles = payload.get("smiles")
-            opts = payload.get("opts") or {}
-
-            if not access_token or not smiles:
-                await msg.respond(json.dumps({"error": "Missing accessToken or smiles"}).encode())
-                return
-
-            user_payload = verify_jwt(access_token)
+            user_payload = verify_jwt(req.accessToken)
             if not user_payload:
                 await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
                 return
 
             canon = to_canonical_smiles(
-                smiles,
-                isomeric=opts.get("isomeric", True),
-                kekule=opts.get("kekule", False),
+                req.smiles,
+                isomeric=opts.isomeric,
+                kekule=opts.kekule,
             )
             await msg.respond(json.dumps({"data": canon}).encode())
 
+        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            await _respond_invalid_request(msg, e)
         except Exception:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
     async def rdkit_same_cb(msg):
         try:
             payload = _extract_payload(msg)
+            req = SameStructureRequest.model_validate(payload)
 
-            access_token = payload.get("accessToken")
-            a = payload.get("a")
-            b = payload.get("b")
-
-            if not access_token or not a or not b:
-                await msg.respond(json.dumps({"error": "Missing accessToken or a/b smiles"}).encode())
-                return
-
-            user_payload = verify_jwt(access_token)
+            user_payload = verify_jwt(req.accessToken)
             if not user_payload:
                 await msg.respond(json.dumps({"error": "Invalid or expired access token"}).encode())
                 return
 
-            same = are_same_structure(a, b)
+            same = are_same_structure(req.a, req.b)
             await msg.respond(json.dumps({"data": same}).encode())
 
+        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            await _respond_invalid_request(msg, e)
         except Exception:
             await msg.respond(json.dumps({"error": "InternalError"}).encode())
 
-    nats_rdkit_props_ns = _rdkit_ns("get_molecule_properties")
-    nats_rdkit_canon_ns = _rdkit_ns("to_canonical_smiles")
-    nats_rdkit_same_ns = _rdkit_ns("are_same_structure")
+    nats_rdkit_props_ns = _format_ns("get_molecule_properties")
+    nats_rdkit_canon_ns = _format_ns("to_canonical_smiles")
+    nats_rdkit_same_ns = _format_ns("are_same_structure")
+    nats_iupac_name_ns = _format_ns("get_iupac_name_from_smiles")
 
     await nc.subscribe(nats_rdkit_props_ns, cb=rdkit_props_cb)
     await nc.subscribe(nats_rdkit_canon_ns, cb=rdkit_canon_cb)
     await nc.subscribe(nats_rdkit_same_ns, cb=rdkit_same_cb)
+    await nc.subscribe(nats_iupac_name_ns, cb=iupac_name_cb)
     
     stop_ns = time_ns()
     diff_ms = (stop_ns - start_ns) / 1000000
@@ -209,6 +242,8 @@ async def run():
     print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_props_ns}'...")
     print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_canon_ns}'...")
     print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_same_ns}'...")
+    print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_iupac_name_ns}'...")
+
 
     while True:
         await asyncio.sleep(1)
