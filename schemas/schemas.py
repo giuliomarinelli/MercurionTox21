@@ -1,5 +1,8 @@
-from typing_extensions import Annotated
-from pydantic import BaseModel, StringConstraints, ConfigDict, Field
+from typing_extensions import Annotated, Self
+from pydantic import (
+    BaseModel, StringConstraints, ConfigDict, Field,
+    ValidationInfo, field_validator, model_validator,
+)
 
 SmilesStr = Annotated[
     str,
@@ -20,14 +23,29 @@ TokenStr = Annotated[
 ]
 
 
-class InferenceRequest(BaseModel):
-    smiles: SmilesStr
-    accessToken: TokenStr
+class AuthenticatedRequest(BaseModel):
+    accessToken: TokenStr | None = None
     model_config = ConfigDict(extra="forbid")  # blocca campi extra nel payload
 
+    @field_validator("accessToken", mode="before")
+    @classmethod
+    def validate_access_token(cls, value, info: ValidationInfo):
+        if info.context and info.context.get("skip_auth"):
+            return None
+        return value
 
-class RdkitRequest(BaseModel):
-    accessToken: TokenStr
+    @model_validator(mode="after")
+    def require_access_token(self, info: ValidationInfo) -> Self:
+        if not (info.context and info.context.get("skip_auth")) and self.accessToken is None:
+            raise ValueError("accessToken is required")
+        return self
+
+
+class InferenceRequest(AuthenticatedRequest):
+    smiles: SmilesStr
+
+
+class RdkitRequest(AuthenticatedRequest):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 

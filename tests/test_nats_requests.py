@@ -1,4 +1,3 @@
-import io
 import json
 from pathlib import Path
 import runpy
@@ -29,26 +28,28 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             "config": SimpleNamespace(get_config=lambda: config),
             "torch": Mock(),
             "api.inference": SimpleNamespace(predict=Mock(return_value={"prediction": 1})),
+            "api.pcp": SimpleNamespace(get_iupac_name_from_smiles=Mock(return_value="ethanol")),
             "mercurion.model": SimpleNamespace(MercurionMLP=Mock()),
         }
         real_open = open
 
         def test_open(path, *args, **kwargs):
             if path == config.jwt_public_key_path:
-                return io.StringIO("test-public-key")
+                raise AssertionError("Public mode must not read the JWT public key")
             return real_open(path, *args, **kwargs)
 
         with patch.dict("sys.modules", dependencies), patch("builtins.open", test_open), patch("builtins.print"):
             module = runpy.run_path(str(ROOT / "main.py"), run_name="nats_validation_test")
         cls.run_service = staticmethod(module["run"])
         cls.runtime = cls.run_service.__globals__
+        cls.default_skip_auth = module["GLOBAL_SKIP_AUTH_FLAG"]
 
     async def asyncSetUp(self):
         self.callbacks = {}
 
         async def subscribe(subject, cb):
             self.callbacks[subject.removeprefix("development.")] = cb
-            if len(self.callbacks) == 4:
+            if len(self.callbacks) == 5:
                 raise StartupComplete()
 
         client = SimpleNamespace(connect=AsyncMock(), subscribe=subscribe)
@@ -56,12 +57,15 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.properties = Mock(return_value=SimpleNamespace(to_dict=lambda: {"mwFreebase": 46.07}))
         self.canonical = Mock(return_value="CCO")
         self.same = Mock(return_value=True)
+        self.iupac = Mock(return_value="ethanol")
         replacements = {
+            "GLOBAL_SKIP_AUTH_FLAG": False,
             "NATS": lambda: client,
             "verify_jwt": self.verify_jwt,
             "get_molecule_properties": self.properties,
             "to_canonical_smiles": self.canonical,
             "are_same_structure": self.same,
+            "get_iupac_name_from_smiles": self.iupac,
         }
         patcher = patch.dict(self.runtime, replacements)
         patcher.start()
@@ -84,6 +88,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             "rdkit_api.get_molecule_properties": {"smiles": "CCO", "accessToken": TOKEN},
             "rdkit_api.to_canonical_smiles": {"smiles": "CCO", "accessToken": TOKEN},
             "rdkit_api.are_same_structure": {"a": "CCO", "b": "OCC", "accessToken": TOKEN},
+            "rdkit_api.get_iupac_name_from_smiles": {"smiles": "CCO", "accessToken": TOKEN},
         }
 
     async def test_valid_requests_accept_direct_and_nest_enveloped_payloads(self):
@@ -97,6 +102,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.properties.assert_called_with("CCO")
         self.canonical.assert_called_with("CCO", isomeric=True, kekule=False)
         self.same.assert_called_with("CCO", "OCC")
+        self.iupac.assert_called_with("CCO")
 
     async def test_invalid_payloads_are_rejected_before_authentication(self):
         for subject, valid in self.valid_requests().items():
@@ -112,6 +118,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.properties.assert_not_called()
         self.canonical.assert_not_called()
         self.same.assert_not_called()
+        self.iupac.assert_not_called()
 
     async def test_both_comparison_smiles_are_validated(self):
         for value in (None, 123, " ", "C" * 1025):
@@ -174,6 +181,50 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.properties.assert_not_called()
         self.canonical.assert_not_called()
         self.same.assert_not_called()
+        self.iupac.assert_not_called()
+
+    async def test_public_mode_is_enabled_by_default(self):
+        self.assertIs(self.default_skip_auth, True)
+        self.assertIsNone(self.runtime["PUBLIC_KEY"])
+
+    async def test_public_mode_ignores_missing_and_invalid_tokens_on_all_endpoints(self):
+        self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        self.verify_jwt.side_effect = AssertionError("JWT verification must be skipped")
+        for subject, valid in self.valid_requests().items():
+            without_token = {key: value for key, value in valid.items() if key != "accessToken"}
+            cases = [without_token]
+            cases += [{**without_token, "accessToken": token} for token in (None, "", "expired-token", 123, [], {})]
+            for payload in cases:
+                for enveloped in (False, True):
+                    with self.subTest(subject=subject, enveloped=enveloped, payload=payload):
+                        wire = {"id": "request-id", "data": payload} if enveloped else payload
+                        response = await self.request(subject, wire)
+                        self.assertNotIn("error", response)
+        self.verify_jwt.assert_not_called()
+
+    async def test_public_mode_preserves_payload_validation(self):
+        self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        for subject, valid in self.valid_requests().items():
+            without_token = {key: value for key, value in valid.items() if key != "accessToken"}
+            smiles_field = "a" if "a" in valid else "smiles"
+            for invalid in ({**without_token, smiles_field: " "}, {**without_token, "unexpected": True}):
+                response = await self.request(subject, invalid)
+                self.assertTrue(response["error"].startswith("Invalid request:"))
+        response = await self.request("rdkit_api.to_canonical_smiles", {"smiles": "CCO", "opts": {"isomeric": "false"}})
+        self.assertTrue(response["error"].startswith("Invalid request:"))
+        self.verify_jwt.assert_not_called()
+        self.properties.assert_not_called()
+        self.canonical.assert_not_called()
+        self.same.assert_not_called()
+        self.iupac.assert_not_called()
+
+    async def test_authenticated_mode_requires_token_on_all_endpoints(self):
+        for subject, valid in self.valid_requests().items():
+            without_token = {key: value for key, value in valid.items() if key != "accessToken"}
+            for payload in (without_token, {**without_token, "accessToken": None}):
+                response = await self.request(subject, payload)
+                self.assertTrue(response["error"].startswith("Invalid request:"))
+        self.verify_jwt.assert_not_called()
 
 
 if __name__ == "__main__":
