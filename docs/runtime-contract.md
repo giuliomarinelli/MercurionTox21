@@ -120,7 +120,14 @@ importing pandas native modules. A diagnostic rerun identified that import stack
 also stopped; no test result was obtained for that group. It is not counted as passed or
 repaired. Training/dependency remediation remains outside T21-02.
 
-No fresh install, container build, real-model execution, real NATS reconnection, browser
-validation or remote application CI was performed. Dedicated Tox21 CI is planned in
-T21-05. Source/diff checks and local focused tests are evidence of this task, not a full
-deployment acceptance claim.
+A separate isolated smoke check on source commit `884e74fccd78dd8bb7cdcf8847b29c06551d709d`
+imported `main`, loaded the actual tracked weights/thresholds through
+`load_inference_runtime` and predicted `CCO` on CPU. It returned exactly the four expected
+labels with probabilities in `[0, 1]`, without connecting NATS or calling PubChem. No model
+files changed. This verifies the changed loader's native-library import order and one real
+prediction; it does not prove checkpoint/threshold provenance, accuracy or complete
+prediction regression coverage.
+
+No fresh install, container build, real NATS reconnection, browser validation or remote
+application CI was performed. Dedicated Tox21 CI is planned in T21-05. Source/diff checks,
+local unit tests and this isolated real-weight smoke check are not full deployment acceptance.
