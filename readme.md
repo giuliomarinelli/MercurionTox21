@@ -190,9 +190,11 @@ groups still require their imported Python/native dependencies to be installed.
 The original design inventory identified 18 handler methods, seven RDKit methods and four
 pipeline methods. T21-02 verified 54 focused application tests, including the 25 handler/
 RDKit cases, configuration, synthetic RSA signatures and fake-client lifecycle tests;
-[results and limits](docs/runtime-contract.md). The pipeline group was interrupted during
-a pandas native import and has no new result. Real-model inference, real NATS recovery,
-coherent export verification and dedicated application CI remain planned work.
+[results and limits](docs/runtime-contract.md). A separate smoke check loaded the tracked
+weights and produced one CPU prediction without NATS/PubChem. The pipeline group was
+interrupted during a pandas native import and has no new result. Broader real-model
+regression, real NATS recovery, coherent export verification and dedicated application CI
+remain planned work.
 
 ## Containers and planned runtime boundary
 
