@@ -87,6 +87,10 @@ jobs:
             python3 -B scripts/smoke_container.py "tox21-$target" --target "$target" \
               --report-dir "artifacts/smoke-$target" | tee "artifacts/smoke-$target.log"
           done
+      - name: Export and load candidate, generate SBOM and enforce critical vulnerability policy
+        run: |
+          python3 -B scripts/container_evidence.py --image tox21-production \
+            --output artifacts/container --cache "$RUNNER_TEMP/tox21-trivy-cache"
       - name: Upload diagnostics even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -96,6 +100,8 @@ jobs:
             artifacts/*.log
             artifacts/*.json
             artifacts/smoke-*/
+            artifacts/container/*.json
+            artifacts/container/*.log
           if-no-files-found: error
           retention-days: 14
       - name: Upload successfully exported QA package independently

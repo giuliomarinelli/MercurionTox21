@@ -20,13 +20,13 @@ assert {p.name for p in pathlib.Path('/app').iterdir()}==expected
 assert {p.name for p in pathlib.Path('/app/model').iterdir()}=={'weights.pt','thresholds.json','manifest.json'}
 assert not os.access('/app/model/weights.pt',os.W_OK)
 pathlib.Path('/tmp/runtime-write-check').write_text('temporary writes allowed')
-from runtime import load_inference_runtime
+from runtime import load_inference_runtime,read_build_identity
 model,device,predict=load_inference_runtime(package_dir='/app/model')
 a=predict('CCO',model,device); b=predict('CCO',model,device)
 assert a==b and set(a)=={'SR-ATAD5','NR-AhR','SR-MMP','SR-p53'}
 assert all(0<=item['probability']<=1 for item in a.values())
 print(json.dumps({'uid':os.getuid(),'gid':os.getgid(),'device':device,'environment':os.environ['PY_ENV'],
-                  'readonly':True,'training_absent':True,'repeatable_inference':True}))
+                  'readonly':True,'training_absent':True,'repeatable_inference':True,'build':read_build_identity()}))
 '''
 
 
@@ -54,6 +54,8 @@ def main():
         "--entrypoint", "python", args.image, "-B", "-c", AUDIT,
     ], text=True)
     result = json.loads(output)
+    assert result['build'] == {'version': args.version, 'revision': args.revision.lower(),
+                               'source': labels['org.opencontainers.image.source']}
     assert result["environment"] == args.target
     print(json.dumps({"image": args.image, "image_id": image["Id"], "size_bytes": image["Size"], **result}))
 

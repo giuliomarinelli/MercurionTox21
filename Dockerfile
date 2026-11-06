@@ -24,7 +24,7 @@ RUN /opt/venv/bin/python -m pip install --require-hashes --no-build-isolation -r
 COPY mercurion/calibration.py mercurion/export_model.py mercurion/train.py \
      mercurion/preprocessing.py mercurion/early_stopping.py mercurion/focal_loss.py ./mercurion/
 COPY tests ./tests
-COPY scripts/run_tests.py ./scripts/run_tests.py
+COPY scripts/run_tests.py scripts/container_evidence.py ./scripts/
 RUN /opt/venv/bin/python -B scripts/run_tests.py all && \
     /opt/venv/bin/python -c "from pathlib import Path; Path('/build/tests-passed').write_text('Self-contained unittest groups passed\n')"
 
@@ -41,6 +41,7 @@ RUN python -c "import os,re; assert os.environ.get('BUILD_VERSION','').strip(), 
     useradd --uid 10021 --gid 10021 --no-create-home --shell /usr/sbin/nologin mercurion
 WORKDIR /app
 COPY --from=runtime-dependencies /opt/venv /opt/venv
+RUN python -c "import json,os,pathlib; p=pathlib.Path('/usr/share/mercurion'); p.mkdir(parents=True,exist_ok=True); (p/'build-identity.json').write_text(json.dumps({'version':os.environ['BUILD_VERSION'],'revision':os.environ['BUILD_REVISION'].lower(),'source':'https://github.com/giuliomarinelli/MercurionTox21'}))"
 COPY --from=runtime-source /app /app
 COPY --from=model_package /weights.pt /thresholds.json /manifest.json ./model/
 RUN rm -rf /opt/venv/lib/python3.10/site-packages/pip /opt/venv/lib/python3.10/site-packages/pip-*.dist-info /opt/venv/bin/pip* \

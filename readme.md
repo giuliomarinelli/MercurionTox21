@@ -179,8 +179,8 @@ python -B scripts/run_tests.py application
 python -B scripts/run_tests.py all
 ```
 
-The default application group has 85 tests and needs only runtime dependencies. The
-self-contained `all` group has 99 and requires the training/export profile. The separate
+The current application group has 93 tests and needs only runtime dependencies. The
+self-contained `all` group has 107 and requires the training/export profile. The separate
 `reference` group checks a matching real package; it fails when that package is missing
 instead of silently skipping. Linux checks also pass in reverse order; no retraining on
 the real dataset or external services are part of these tests.
@@ -227,7 +227,7 @@ python -m unittest tests.test_model_package tests.test_model_export tests.test_c
 The root [Dockerfile](Dockerfile) has `test`, `staging` and `production` targets,
 with a positive [.dockerignore](.dockerignore) and explicit runtime copies.
 All run `python -m main` non-root and accept a separately exported model package
-as a named build context. The test target requires the 99 self-contained tests
+as a named build context. The test target requires the self-contained tests
 to pass in a separate build stage; no training, tests, datasets or historical
 outputs are copied into any final target. Staging/production configuration is
 external. [Build, validation and runtime instructions](docs/containers.md)
@@ -246,3 +246,7 @@ until integration:
 ## License
 
 See [LICENSE.md](LICENSE.md).
+
+T21-07 adds [candidate archives and security evidence](docs/delivery.md). Delivery
+remains blocked by the inherited critical-vulnerability gate; a functional CI result
+does not imply release approval.

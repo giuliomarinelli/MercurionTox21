@@ -9,7 +9,7 @@ from api.rdkit import (
 )
 from api.pcp import CompoundNotFoundError, get_iupac_name_from_smiles
 from config import ConfigurationError, get_config, nats_subject
-from runtime import load_inference_runtime, load_public_key
+from runtime import load_inference_runtime, load_public_key, read_build_identity
 import signal
 import json
 from schemas.schemas import (
@@ -89,6 +89,7 @@ async def run(
     ready = ready_event if ready_event is not None else asyncio.Event()
     ready.clear()
     config = get_config()
+    build_identity = read_build_identity()
     PUBLIC_KEY = load_public_key(config.jwt_public_key_path, skip_auth=GLOBAL_SKIP_AUTH_FLAG)
     model, device, predict = load_inference_runtime(package_dir=config.model_package_dir)
     env = config.py_env
@@ -256,6 +257,7 @@ async def run(
         ready.set()
         print(f"[MercurionTox21 > main] Ready in {(time_ns() - started) / 1_000_000:.1f}ms")
         print(f"[MercurionTox21 > main] Environment: {env}; device: {device}; version: {config.version}")
+        print('[MercurionTox21 > main] Build identity: ' + json.dumps(build_identity, sort_keys=True))
         await stop.wait()
         if unexpected_close:
             raise ConnectionError("NATS connection closed")
