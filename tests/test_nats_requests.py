@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from api.pcp import CompoundNotFoundError
 from api.rdkit import InvalidSmilesError
+from config import nats_subject
 
 
 TOKEN = "test-access-token"
@@ -29,7 +30,9 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             jwt_public_key_path="test-only-public-key.pem",
         )
         dependencies = {
-            "config": SimpleNamespace(get_config=lambda: config),
+            "config": SimpleNamespace(
+                get_config=lambda: config, nats_subject=nats_subject, ConfigurationError=ValueError
+            ),
             "torch": Mock(),
             "api.inference": SimpleNamespace(predict=Mock(return_value={"prediction": 1})),
             "api.pcp": SimpleNamespace(
@@ -60,7 +63,10 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             if len(self.callbacks) == 5:
                 raise StartupComplete()
 
-        client = SimpleNamespace(connect=AsyncMock(), subscribe=subscribe)
+        client = SimpleNamespace(
+            connect=AsyncMock(), subscribe=subscribe, drain=AsyncMock(), close=AsyncMock(),
+            is_connected=True, is_closed=False,
+        )
         self.verify_jwt = Mock(return_value={"sub": "test-user"})
         self.properties = Mock(return_value=SimpleNamespace(to_dict=lambda: {"mwFreebase": 46.07}))
         self.canonical = Mock(return_value="CCO")
@@ -68,6 +74,8 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.iupac = Mock(return_value="ethanol")
         replacements = {
             "GLOBAL_SKIP_AUTH_FLAG": False,
+            "load_public_key": Mock(return_value=None),
+            "load_inference_runtime": Mock(return_value=(Mock(), "cpu", Mock(return_value={"prediction": 1}))),
             "NATS": lambda: client,
             "verify_jwt": self.verify_jwt,
             "get_molecule_properties": self.properties,

@@ -1,37 +1,51 @@
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Mapping
+
+from dotenv import dotenv_values
 from pydantic import ValidationError
 from schemas.schemas import Configuration
-import sys
 
 
-def get_config() -> Configuration:
+class ConfigurationError(ValueError):
+    """Invalid startup settings; never include supplied values in diagnostics."""
 
-    def env_file_for(py_env: str | None) -> str:
-        py_env = (py_env or "development").lower()
-        return {
-            "development": ".env.development",
-            "test": ".env.test",
-            "staging": ".env.staging",
-            "production": ".env",
-        }.get(py_env, ".env.development")
 
-    PY_ENV = os.getenv("PY_ENV", "development")
-    ENV_FILE = env_file_for(PY_ENV)
-    load_dotenv(ENV_FILE, override=False)
+ENVIRONMENTS = ("development", "test", "staging", "production")
+
+
+def get_config(
+    environment: Mapping[str, str] | None = None, *, root: Path | None = None
+) -> Configuration:
+    process = dict(os.environ if environment is None else environment)
+    py_env = process.get("PY_ENV", "development")
+    if py_env not in ENVIRONMENTS:
+        raise ConfigurationError("PY_ENV must be development, test, staging or production")
+
+    # Local dotenv files are convenience input only; never read them in deployed modes.
+    values: dict[str, str | None] = {}
+    if py_env in ("development", "test"):
+        values.update(dotenv_values((root or Path.cwd()) / f".env.{py_env}", interpolate=False))
+    values.update(process)
     raw = {
-        "nats_url": os.getenv("NATS_URL"),
-        "version": os.getenv("VERSION"),
-        "py_env": PY_ENV,
-        "jwt_public_key_path": os.getenv("JWT_PUBLIC_KEY_PATH") or (f"public.{PY_ENV}.pem" if PY_ENV != "production" else "public.pem")
+        "py_env": py_env,
+        "nats_url": values.get("NATS_URL"),
+        "version": values.get("VERSION"),
+        "jwt_public_key_path": values.get("JWT_PUBLIC_KEY_PATH")
+        or ("public.pem" if py_env == "production" else f"public.{py_env}.pem"),
     }
-
     try:
         return Configuration(**raw)
-    except (ValidationError, Exception) as e:
-        print(f"FATAL: invalid configuration\n{e}", file=sys.stderr)
-        sys.exit(1)
+    except ValidationError as error:
+        fields = sorted({str(item["loc"][0]) for item in error.errors(include_input=False)})
+        raise ConfigurationError("Invalid configuration fields: " + ", ".join(fields)) from None
+
+
+def nats_subject(base: str, environment: str) -> str:
+    if environment not in ENVIRONMENTS:
+        raise ConfigurationError("Invalid NATS environment")
+    return base if environment == "production" else f"{environment}.{base}"
 
 
 if __name__ == "__main__":
-    print(get_config())
+    print(f"Configuration valid for {get_config().py_env}")

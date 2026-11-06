@@ -5,11 +5,12 @@ from mercurion.labels import tox21_labels
 import torch
 import json
 
-with open("outputs/best_threshold.json", "r") as f:
-    BEST_THRESHOLD = json.load(f)["best_threshold"]
-    
-with open("outputs/best_thresholds.json", "r") as f:
-    PER_LABEL_THRESHOLDS = json.load(f)["per_label_thresholds"]
+def load_thresholds():
+    # Preserve the current package inputs; coherent export belongs to T21-03.
+    with open("outputs/best_threshold.json", "r") as f:
+        json.load(f)["best_threshold"]
+    with open("outputs/best_thresholds.json", "r") as f:
+        return json.load(f)["per_label_thresholds"]
 
 # ✔️ Label e indice: definiti una sola volta, in ordine
 ALL_LABELS = tox21_labels
@@ -27,7 +28,9 @@ def smiles_to_fp(smiles):
     return np.array([int(b) for b in fp], dtype=np.float32)
 
 # ✔️ Inference function
-def predict(smiles, model, device):
+def predict(smiles, model, device, *, thresholds=None):
+    if thresholds is None:
+        thresholds = load_thresholds()
     fp = smiles_to_fp(smiles)
     if fp is None:
         return {'error': 'Invalid SMILES'}
@@ -42,7 +45,7 @@ def predict(smiles, model, device):
     results = {}
     for i, label in enumerate(TOP4_LABELS):
         prob = top4_probs[i]
-        threshold = PER_LABEL_THRESHOLDS[label]
+        threshold = thresholds[label]
         is_positive = prob > threshold
         results[label] = {
             "probability": prob,
