@@ -73,10 +73,11 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.canonical = Mock(return_value="CCO")
         self.same = Mock(return_value=True)
         self.iupac = Mock(return_value="ethanol")
+        self.inference = Mock(return_value={"prediction": 1})
         replacements = {
             "GLOBAL_SKIP_AUTH_FLAG": False,
             "load_public_key": Mock(return_value=None),
-            "load_inference_runtime": Mock(return_value=(Mock(), "cpu", Mock(return_value={"prediction": 1}))),
+            "load_inference_runtime": Mock(return_value=(Mock(), "cpu", self.inference)),
             "NATS": lambda: client,
             "verify_jwt": self.verify_jwt,
             "get_molecule_properties": self.properties,
@@ -121,6 +122,104 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
         self.canonical.assert_called_with("CCO", isomeric=True, kekule=False)
         self.same.assert_called_with("CCO", "OCC")
         self.iupac.assert_called_with("CCO")
+
+    async def test_exact_valid_smiles_and_token_boundaries(self):
+        for subject, valid in self.valid_requests().items():
+            for length in (1, 1024):
+                for token_length in (10, 4096):
+                    payload = {**valid, "accessToken": "t" * token_length}
+                    for name in ("smiles", "a", "b"):
+                        if name in payload:
+                            payload[name] = "C" * length
+                    with self.subTest(subject=subject, length=length, token_length=token_length):
+                        result = await self.request(subject, payload)
+                        self.assertNotIn("error", result)
+
+    async def test_invalid_envelope_data_is_validated_not_replaced_by_outer_fields(self):
+        for subject, valid in self.valid_requests().items():
+            for data in (None, [], {}, "CCO"):
+                result = await self.request(subject, {**valid, "id": "synthetic", "data": data})
+                self.assertTrue(result["error"].startswith("Invalid request:"))
+        self.verify_jwt.assert_not_called()
+
+    async def test_internal_errors_on_each_operation_do_not_expose_exception_details(self):
+        for subject, operation in (("inference.tox21.smiles", self.inference),
+                                   ("rdkit_api.get_molecule_properties", self.properties),
+                                   ("rdkit_api.to_canonical_smiles", self.canonical),
+                                   ("rdkit_api.are_same_structure", self.same),
+                                   ("pcp_api.get_iupac_name_from_smiles", self.iupac)):
+            operation.side_effect = RuntimeError("synthetic-private-detail-" + TOKEN)
+            with self.subTest(subject=subject):
+                result = await self.request(subject, self.valid_requests()[subject])
+                self.assertEqual(result, {"error": "InternalError"})
+
+    async def test_failed_response_is_not_retried_as_an_internal_error(self):
+        for subject, payload in self.valid_requests().items():
+            message = SimpleNamespace(data=json.dumps(payload).encode(), reply="_INBOX.test",
+                                      respond=AsyncMock(side_effect=ConnectionError("synthetic delivery failure")))
+            with self.subTest(subject=subject):
+                with self.assertRaises(self.runtime["ResponseDeliveryError"]):
+                    await self.callbacks[subject](message)
+                self.assertEqual(message.respond.await_count, 1)
+
+    async def test_structure_comparison_false_result_is_not_turned_into_an_error(self):
+        self.same.return_value = False
+        response = await self.request("rdkit_api.are_same_structure", self.valid_requests()["rdkit_api.are_same_structure"])
+        self.assertEqual(response, {"data": False})
+
+    async def test_cancelled_response_is_not_retried(self):
+        for subject, payload in self.valid_requests().items():
+            message = SimpleNamespace(data=json.dumps(payload).encode(), reply="_INBOX.test",
+                                      respond=AsyncMock(side_effect=asyncio.CancelledError))
+            with self.subTest(subject=subject), self.assertRaises(asyncio.CancelledError):
+                await self.callbacks[subject](message)
+            self.assertEqual(message.respond.await_count, 1)
+
+    async def test_unserializable_or_nonfinite_results_become_one_application_error(self):
+        for invalid in (object(), float("nan")):
+            operations = (("inference.tox21.smiles", self.inference),
+                          ("rdkit_api.get_molecule_properties", self.properties),
+                          ("rdkit_api.to_canonical_smiles", self.canonical),
+                          ("rdkit_api.are_same_structure", self.same),
+                          ("pcp_api.get_iupac_name_from_smiles", self.iupac))
+            for subject, operation in operations:
+                operation.return_value = (SimpleNamespace(to_dict=lambda: {"bad": invalid})
+                                          if operation is self.properties else invalid)
+                with self.subTest(subject=subject, value_type=type(invalid).__name__):
+                    self.assertEqual(await self.request(subject, self.valid_requests()[subject]),
+                                     {"error": "InternalError"})
+
+    async def test_error_response_delivery_failure_does_not_attempt_a_second_reply(self):
+        for subject in self.callbacks:
+            message = SimpleNamespace(data=b"{", reply="_INBOX.test",
+                                      respond=AsyncMock(side_effect=ConnectionError("synthetic")))
+            with self.subTest(subject=subject), self.assertRaises(self.runtime["ResponseDeliveryError"]):
+                await self.callbacks[subject](message)
+            self.assertEqual(message.respond.await_count, 1)
+
+    async def test_shared_wire_fixture_matches_python_handlers_and_namespaces(self):
+        fixture = json.loads((ROOT / "tests/fixtures/tox21-wire.json").read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_version"], 1)
+        self.assertEqual(len(fixture["cases"]), 5)
+        for case in fixture["cases"]:
+            subject, response = case["subject"], case["response"]
+            if subject == "inference.tox21.smiles":
+                self.inference.return_value = response
+            elif subject == "rdkit_api.get_molecule_properties":
+                self.properties.return_value = SimpleNamespace(to_dict=lambda: response["data"])
+            elif subject == "rdkit_api.to_canonical_smiles":
+                self.canonical.return_value = response["data"]
+            elif subject == "rdkit_api.are_same_structure":
+                self.same.return_value = response["data"]
+            else:
+                self.iupac.return_value = response["data"]["iupac_name"]
+            for enveloped in (False, True):
+                wire = {"id": "fixture", "data": case["request"]} if enveloped else case["request"]
+                with self.subTest(subject=subject, enveloped=enveloped):
+                    self.assertEqual(await self.request(subject, wire), response)
+            for environment in fixture["environments"]:
+                expected = subject if environment == "production" else f"{environment}.{subject}"
+                self.assertEqual(nats_subject(subject, environment), expected)
 
     async def test_invalid_payloads_are_rejected_before_authentication(self):
         for subject, valid in self.valid_requests().items():

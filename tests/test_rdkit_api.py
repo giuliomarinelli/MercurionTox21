@@ -6,6 +6,7 @@ from rdkit.Chem import Crippen, Descriptors, Lipinski, rdMolDescriptors
 
 from api.rdkit import (
     InvalidSmilesError,
+    CanonicalizationError,
     are_same_structure,
     get_molecule_properties,
     get_structure_key,
@@ -62,6 +63,45 @@ class RdkitApiTests(unittest.TestCase):
         for operation in (get_molecule_properties, to_canonical_smiles, get_structure_key):
             with self.subTest(operation=operation.__name__), self.assertRaises(InvalidSmilesError):
                 operation(" ")
+
+    def test_nonempty_chemically_invalid_smiles_raise_domain_error(self):
+        for operation in (get_molecule_properties, to_canonical_smiles, get_structure_key):
+            with self.subTest(operation=operation.__name__), self.assertRaises(InvalidSmilesError):
+                operation("not-a-smiles")
+
+    def test_comparison_preserves_false_for_invalid_or_uncanonicalizable_inputs(self):
+        self.assertFalse(are_same_structure("not-a-smiles", "CCO"))
+        self.assertFalse(are_same_structure("CCO", "not-a-smiles"))
+        with patch("api.rdkit.get_structure_key", side_effect=CanonicalizationError("synthetic")):
+            self.assertFalse(are_same_structure("CCO", "OCC"))
+
+    def test_failed_descriptor_is_null_without_losing_other_values(self):
+        with patch("api.rdkit.rdMolDescriptors.CalcNumHBA", side_effect=RuntimeError("synthetic descriptor failure")):
+            result = get_molecule_properties("CCO").to_dict()
+        self.assertIsNone(result["hba"])
+        self.assertAlmostEqual(result["mwFreebase"], 46.069, places=3)
+        self.assertEqual(result["hbd"], 1)
+
+    def test_all_weight_fallbacks_failing_return_null_not_invented_weight(self):
+        with patch("api.rdkit._mol_weight", side_effect=RuntimeError("synthetic")), \
+             patch("api.rdkit.rdMolDescriptors.CalcExactMolWt", side_effect=RuntimeError("synthetic")):
+            self.assertIsNone(get_molecule_properties("CCO").mwFreebase)
+
+    def test_canonicalization_fallback_and_total_failure(self):
+        real = Chem.MolToSmiles
+        calls = []
+
+        def first_fails(*args, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError("synthetic first attempt failure")
+            return real(*args, **kwargs)
+
+        with patch("api.rdkit.Chem.MolToSmiles", side_effect=first_fails):
+            self.assertEqual(to_canonical_smiles("OCC"), "CCO")
+        with patch("api.rdkit.Chem.MolToSmiles", side_effect=RuntimeError("synthetic total failure")):
+            with self.assertRaises(CanonicalizationError):
+                to_canonical_smiles("CCO")
 
 
 if __name__ == "__main__":

@@ -171,6 +171,19 @@ use validation data, keeping the final test set separate.
 
 ## Application and pipeline tests
 
+T21-09 provides [explicit standard-unittest groups and reference regression](docs/application-testing.md):
+
+```bash
+python -B scripts/run_tests.py application
+python -B scripts/run_tests.py all
+```
+
+The default application group has 85 tests and needs only runtime dependencies. The
+self-contained `all` group has 99 and requires the training/export profile. The separate
+`reference` group checks a matching real package; it fails when that package is missing
+instead of silently skipping. Linux checks also pass in reverse order; no retraining on
+the real dataset or external services are part of these tests.
+
 The existing explicit groups are:
 
 ```bash

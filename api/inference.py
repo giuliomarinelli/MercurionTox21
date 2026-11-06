@@ -4,6 +4,7 @@ from mercurion.fingerprints import smiles_to_fingerprint
 from mercurion.model_spec import TOP4_LABELS
 import torch
 import json
+import math
 
 def load_thresholds():
     # Preserve the current package inputs; coherent export belongs to T21-03.
@@ -35,6 +36,8 @@ def predict(smiles, model, device, *, thresholds=None):
     tensor = torch.tensor(fp, dtype=torch.float32).unsqueeze(0).to(device)
     with torch.no_grad():
         output = model(tensor)
+        if tuple(output.shape) != (1, len(ALL_LABELS)) or not torch.isfinite(output).all():
+            raise ValueError("Invalid inference logits")
         probs = torch.sigmoid(output).cpu().numpy().flatten()
         top4_probs = [float(probs[i]) for i in TOP4_INDICES]
 
@@ -43,6 +46,8 @@ def predict(smiles, model, device, *, thresholds=None):
     for i, label in enumerate(TOP4_LABELS):
         prob = top4_probs[i]
         threshold = thresholds[label]
+        if type(threshold) not in (int, float) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
+            raise ValueError("Invalid inference threshold")
         is_positive = prob > threshold
         results[label] = {
             "probability": prob,
