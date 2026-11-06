@@ -1,145 +1,209 @@
-# MercurionTox21 🚀
+# MercurionTox21
 
-MercurionTox21 is a **PyTorch** project for predicting chemical toxicity on the
-**Tox21** dataset. A lightweight 🌟 multi‑layer perceptron (MLP) analyzes a
-compound's SMILES string and estimates whether it triggers any of twelve
-toxicological endpoints. The top four labels with the highest validation scores
-are **SR‑ATAD5**, **NR‑AhR**, **SR‑MMP** and **SR‑p53**.
+MercurionTox21 is the Python inference and chemistry component of the Mercurion project,
+maintained in its own [Git repository](https://github.com/giuliomarinelli/MercurionTox21).
+The web application and its NATS consumers live in
+[MercurionWeb](https://github.com/giuliomarinelli/MercurionWeb).
 
-The repository also contains a production‑ready microservice that exposes the
-model over a blazing‑fast 🔥 [NATS](https://nats.io/) messaging channel. The
-service verifies RS256 access tokens and responds with per‑label probabilities
-and thresholds.
+The application starts with `python -m main` from this repository root. It serves MLP
+toxicity predictions, RDKit operations and PubChem name lookups over NATS. Model training
+runs locally as a separate workflow. A checkout beside MercurionWeb, reachable there as
+`../MercurionTox21`, is a local development convention, not part of the component's name
+or a required layout for distributing its container.
 
----
+## Repository map
 
-## 🗂️ Repository layout
+| Path | Responsibility |
+| --- | --- |
+| [main.py](main.py) | Application bootstrap and five NATS request handlers |
+| [config.py](config.py), [schemas/schemas.py](schemas/schemas.py) | Environment configuration and request validation |
+| [api/inference.py](api/inference.py) | SMILES fingerprint and MLP prediction |
+| [api/rdkit.py](api/rdkit.py), [api/pcp.py](api/pcp.py) | Chemistry operations and PubChem client |
+| [mercurion/model.py](mercurion/model.py), [mercurion/labels.py](mercurion/labels.py) | Network definition and ordered output labels |
+| [mercurion/train.py](mercurion/train.py), [mercurion/preprocessing.py](mercurion/preprocessing.py) | Local training and dataset preparation |
+| `outputs/models/best_model.pt`, `outputs/best_threshold*.json` | Selected weights and inference thresholds |
+| `data/`, `notebooks/` | Local model development inputs and exploration |
+| `tests/` | Application regression tests, pipeline tests and evaluation scripts |
 
-| Path                         | Description |
-|------------------------------|-------------|
-| `mercurion/model.py`        | Definition of the MLP network 🤖 |
-| `mercurion/train.py`        | Training loop with early stopping and focal loss 🏋️ |
-| `mercurion/preprocessing.py`| Converts the original CSV into NumPy tensors 🧬 |
-| `data/raw/`                 | Original Tox21 CSV 📝 |
-| `data/processed/`           | Vectorized `*.npy` files produced by preprocessing 💾 |
-| `outputs/`                  | Saved models and thresholds after training 🏁 |
-| `inference.py`              | NATS‑based inference microservice 📡 |
-
----
-
-## 🛠️ Getting started
-
-1. **Clone** the repository
-
-   ```bash
-   git clone https://github.com/your-org/MercurionTox21.git
-   cd MercurionTox21
-   ```
-
-2. **Create a virtual environment** (optional but recommended)
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. **Install the requirements**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-## 🧬 Preparing the data
-
-The repository ships with the original Tox21 CSV in `data/raw/tox21.csv`.
-Convert it into train/validation/test tensors with:
+## Clone and install
 
 ```bash
-python mercurion/preprocessing.py
+git clone --branch develop https://github.com/giuliomarinelli/MercurionTox21.git
+cd MercurionTox21
 ```
 
-This creates the `data/processed/` directory containing NumPy arrays for model
-training.
+These instructions describe the application source on `develop`; they do not assume
+that the repository's default branch contains the same runtime or test inventory.
 
----
+On Windows PowerShell:
 
-## 🤖 Training the model
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
 
-Run the training script to fit the MLP and compute optimal thresholds:
+On Linux/macOS:
 
 ```bash
-python mercurion/train.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Key outputs:
+The virtualenv is created locally and ignored by Git. Do not copy another computer's
+virtualenv. The current Dockerfiles use Python `3.10.11`; a fresh-install verification of
+the Python/native dependency combination and a runtime-only dependency set are planned
+work, not results certified by these instructions. The current requirements also include
+model-development dependencies.
 
-* `outputs/models/best_model.pt` – parameters of the best model ✨
-* `outputs/best_threshold.json` – global decision threshold 📏
-* `outputs/best_thresholds.json` – per‑label thresholds for the four top labels 📊
+## Configure and start the application
 
-You can adjust training parameters (epochs, learning rate, batch size) by
-editing `mercurion/train.py`.
+Start an appropriate non-production NATS broker first. Then, from this repository root
+with the virtualenv activated, explicitly configure the worker. For the conventional Web
+development broker on host port `4223`, Windows PowerShell uses:
 
----
+```powershell
+$env:PY_ENV = 'development'
+$env:NATS_URL = 'nats://localhost:4223'
+$env:VERSION = 'local-dev'
+python -m main
+```
 
-## 🔐 Generating an RSA key pair
-
-The inference service validates JWT access tokens using **RS256**. Generate a
-2048‑bit key pair with [OpenSSL](https://www.openssl.org/):
+Linux/macOS:
 
 ```bash
-# Private key (keep this secret!)
-openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
-
-# Public key (commit or deploy alongside the microservice)
-openssl rsa -in private.pem -pubout -out public.pem
+export PY_ENV=development
+export NATS_URL=nats://localhost:4223
+export VERSION=local-dev
+python -m main
 ```
 
-Place `public.pem` in the project root so `inference.py` can verify incoming
-tokens. The private key is used by your authentication service to sign JWTs.
+The broker address is configurable; inside a container, `localhost` refers to that
+container, not to the host or a different service. Match `PY_ENV` to the Web consumer's
+environment. `local-dev` is an explicit development version string, not a release identity.
+Launching the application requires an existing compatible model package; it does not
+require training again at every startup.
 
----
+The current loader expects these files relative to the working directory:
 
-## 🚀 Starting inference in production
+- `outputs/models/best_model.pt`
+- `outputs/best_threshold.json`
+- `outputs/best_thresholds.json`
 
-1. **Ensure a NATS server is running.** The code connects to
-   `nats://localhost:4223`; adjust the URL in `inference.py` if your server uses a
-   different host or port.
+Weights alone are insufficient: the network definition, fingerprint parameters, ordered
+labels and thresholds must match. The selected checkpoint and thresholds must be exported
+coherently. The current training script saves the best weights and thresholds at different
+points; a verified coherent export procedure remains planned work. This README does not
+certify the provenance or consistency of the model files currently checked in.
 
-2. **Train the model** (see above) and keep `outputs/models/best_model.pt` and
-   the threshold files in `outputs/`.
+Configuration is defined by [config.py](config.py) and `Configuration` in
+[schemas/schemas.py](schemas/schemas.py):
 
-3. **Provide the public RSA key** as `public.pem` in the project root.
+| Setting | Current behavior |
+| --- | --- |
+| `PY_ENV` | Defaults to `development`; use the documented lowercase environment names |
+| `NATS_URL` | Required string in the configuration schema |
+| `VERSION` | Required string in the configuration schema |
+| `JWT_PUBLIC_KEY_PATH` | Optional override; otherwise `public.<PY_ENV>.pem`, or `public.pem` for production |
 
-4. **Launch the microservice**:
+The loader chooses `.env.development`, `.env.test`, `.env.staging` or `.env` for
+`development`, `test`, `staging` or `production`, respectively. Existing process variables
+take precedence over dotenv values. Set `PY_ENV` in the process before startup so the
+correct file is selected. No personal configuration or key file is supplied by the clone;
+the explicit process variables above avoid relying on an existing dotenv file. Strict
+validation of the environment name and the full runtime contract are scheduled separately.
 
-   ```bash
-   python inference.py
-   ```
+## NATS contracts and authentication
 
-   The service subscribes to the subject `inference.tox21.smiles` and responds to
-   requests with a JSON payload describing per‑label probabilities and whether
-   each top label is positive according to its threshold. 📨
+| Base subject | Operation / success response |
+| --- | --- |
+| `inference.tox21.smiles` | Four prediction labels, each with `probability`, `threshold`, `is_positive` |
+| `rdkit_api.get_molecule_properties` | `data` containing molecular descriptors |
+| `rdkit_api.to_canonical_smiles` | `data` containing canonical SMILES |
+| `rdkit_api.are_same_structure` | `data` containing a boolean |
+| `pcp_api.get_iupac_name_from_smiles` | `data` containing `iupac_name` |
 
-5. **Send a request** from your gateway or from the
-   [`nats` CLI](https://github.com/nats-io/natscli):
+Production uses the base subject. Other environments prefix it with `<PY_ENV>.`, for
+example `development.inference.tox21.smiles`. Requests may be direct JSON objects or Nest
+envelopes containing `data`. Errors use an `error` string. Inference returns the four
+labels directly, without an extra `data` wrapper: `SR-ATAD5`, `NR-AhR`, `SR-MMP`, `SR-p53`.
 
-   ```bash
-   nats req inference.tox21.smiles '{"smiles": "CCO", "accessToken": "<jwt>"}'
-   ```
+**Current behavior:** `GLOBAL_SKIP_AUTH_FLAG=True` in `main.py` enables public internal
+mode. Request payloads are still validated, but access tokens are ignored and a JWT key
+is not required for this mode. This is separate from Web user authentication. The code
+also has an authenticated path that verifies RS256 tokens with audience `mercurion-api`
+using the configured public key; the future auth/network policy remains an explicit
+design decision. There is currently no environment variable that switches the global flag.
+Do not interpret the presence of JWT code as proof that authentication is active.
 
----
+## Local model training and evaluation
 
-## ❤️ Contributing
+Run these commands explicitly from the repository root only when preparing a new model:
 
-Pull requests, issues and ideas are welcome! Open an issue to discuss a feature
-or bug, or fork the project and submit a PR. 🛠️
+```bash
+python -m mercurion.preprocessing
+python -m mercurion.train
+```
 
----
+Preprocessing writes arrays under `data/processed/`. Training writes model/threshold files
+under `outputs/`; it uses training loss and a separate validation split per epoch, with
+F1/ROC-AUC metrics and early stopping. These commands can overwrite development outputs
+and are not prerequisites for starting an already prepared inference package.
 
-## 📜 License
+Post-training evaluation scripts use the local model and processed test dataset:
 
-This project is released under the MIT License. See `LICENSE` for details.
+```bash
+python -m tests.test_auc_score
+python -m tests.test_roc_curves
+```
 
+The latter writes ROC plots. These are scientific evaluation tools, not assertion-based
+`unittest` suites or substitutes for service regression tests. Threshold calibration must
+use validation data, keeping the final test set separate.
+
+## Application and pipeline tests
+
+The existing explicit groups are:
+
+```bash
+python -m unittest tests.test_nats_requests
+python -m unittest tests.test_rdkit_api
+python -m unittest tests.test_training_pipeline
+```
+
+The NATS handler tests replace broker, configuration and inference/model dependencies;
+they do not connect to a real NATS server or prove prediction with real weights. RDKit
+tests exercise the native chemistry library. Pipeline tests use synthetic data and replace
+Torch/training dependencies where appropriate; they do not perform full training. The
+groups still require their imported Python/native dependencies to be installed.
+
+The design inventory identified 18 handler methods, seven RDKit methods and four pipeline
+methods. This documentation change does not claim a new test run or a passing CI result.
+Loader/inference tests with real weights, lifecycle tests, coherent export verification
+and a dedicated application CI are scheduled in the roadmap.
+
+## Containers and planned runtime boundary
+
+[Dockerfile.test](Dockerfile.test) and [Dockerfile.staging](Dockerfile.staging) both start
+the service through module `main`. The test Dockerfile currently starts the application;
+its name does not mean it runs the test suite. The existing
+[Compose](docker_mt21/docker-compose.yml) supplies `PY_ENV=test` but not a complete startup
+configuration. Container consolidation and validation from a clean context remain pending.
+
+The target application artifact is an inference-service image containing only runtime
+code/dependencies and the compatible model package: weights, network definition,
+fingerprint settings, labels and thresholds. Training code/dependencies, datasets,
+notebooks and historical model copies stay out of the final staging/production image.
+This boundary is a requirement; the current `COPY . .` Dockerfiles do not yet enforce it.
+
+The coordinated roadmap and design inventory are maintained in MercurionWeb. The linked
+baseline is immutable; later changes should be read on the corresponding Web work branch
+until integration:
+
+- [Container and delivery roadmap](https://github.com/giuliomarinelli/MercurionWeb/blob/fba1f1fdbbf56f4a64fec85a0b22c8172f3cf80f/docs/infrastructure/tox21-container-roadmap.md)
+- [Design constraints and test inventory](https://github.com/giuliomarinelli/MercurionWeb/blob/fba1f1fdbbf56f4a64fec85a0b22c8172f3cf80f/docs/infrastructure/tox21-design-test-inventory.md)
+
+## License
+
+See [LICENSE.md](LICENSE.md).
