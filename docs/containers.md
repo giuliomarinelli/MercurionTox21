@@ -47,11 +47,13 @@ python -B scripts/smoke_container.py mercurion-tox21:test --target test
 Repeat for staging/production. The first command checks identity/content and
 repeatable real inference offline, non-root, with a read-only filesystem.
 The second creates an isolated internal Docker network, its own pinned NATS
-broker and worker, sends a real inference RPC using the default CMD, then
-checks graceful SIGTERM exit. No host ports or existing services are used;
+broker and worker, probes all five subjects using the default CMD, then checks
+broker outage/recovery without worker restart and graceful SIGTERM exit.
+PubChem is tested through request validation, without provider access.
+No host ports or existing services are used;
 owned resources are removed in `finally`. It needs the pinned broker image
 available locally or Docker network access to pull it. These commands are
-local evidence; T21-05 adds remote CI and broader broker contract coverage.
+local evidence; [T21-05 CI](ci.md) runs these checks remotely and retains diagnostics.
 
 For service execution use `--read-only --cap-drop ALL --security-opt
 no-new-privileges:true --tmpfs /tmp:rw,noexec,nosuid,size=64m` and supply

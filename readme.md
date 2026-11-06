@@ -232,7 +232,9 @@ to pass in a separate build stage; no training, tests, datasets or historical
 outputs are copied into any final target. Staging/production configuration is
 external. [Build, validation and runtime instructions](docs/containers.md)
 explain metadata, read-only operation and the local Compose prerequisites.
-Remote CI and coordinated Web deployment remain subsequent roadmap tasks.
+[Tox21 CI](docs/ci.md) runs the isolated groups, clean container builds and NATS
+smokes with a stable Required gate. Coordinated Web deployment remains a
+subsequent roadmap task; a workflow definition alone does not prove a green run.
 
 The coordinated roadmap and design inventory are maintained in MercurionWeb. The linked
 baseline is immutable; later changes should be read on the corresponding Web work branch
