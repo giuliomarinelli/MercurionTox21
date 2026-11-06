@@ -107,7 +107,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.factory = Mock(return_value=self.client)
         self.loader = Mock(return_value=(Mock(), "cpu", Mock(return_value={})))
         self.settings = SimpleNamespace(py_env="test", nats_url="nats://test.invalid:4222",
-                                        version="synthetic", jwt_public_key_path="not-used.pem")
+                                        version="synthetic", jwt_public_key_path="not-used.pem",
+                                        model_package_dir=None)
         patcher = patch.multiple(application, NATS=self.factory, get_config=Mock(return_value=self.settings),
                                  load_inference_runtime=self.loader, GLOBAL_SKIP_AUTH_FLAG=True)
         patcher.start()

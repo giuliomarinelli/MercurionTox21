@@ -82,7 +82,7 @@ async def run(
     ready.clear()
     config = get_config()
     PUBLIC_KEY = load_public_key(config.jwt_public_key_path, skip_auth=GLOBAL_SKIP_AUTH_FLAG)
-    model, device, predict = load_inference_runtime()
+    model, device, predict = load_inference_runtime(package_dir=config.model_package_dir)
     env = config.py_env
     nc = NATS()
     subscriptions_ready = False

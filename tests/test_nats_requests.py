@@ -28,6 +28,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
             nats_url="nats://test.invalid:4222",
             version="test",
             jwt_public_key_path="test-only-public-key.pem",
+            model_package_dir=None,
         )
         dependencies = {
             "config": SimpleNamespace(
