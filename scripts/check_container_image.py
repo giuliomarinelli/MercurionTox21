@@ -5,10 +5,12 @@ import subprocess
 
 
 AUDIT = r'''
-import importlib.util,json,os,pathlib
+import importlib.util,json,os,pathlib,shutil
 assert (os.getuid(),os.getgid()) == (10021,10021)
 assert os.statvfs('/app').f_flag & os.ST_RDONLY
 assert os.environ['MODEL_PACKAGE_DIR']=='/app/model'
+assert shutil.which('pip') is None and shutil.which('pip3') is None
+assert pathlib.Path('/usr/share/mercurion/tests-passed').exists() == (os.environ['PY_ENV']=='test')
 for name in ['pandas','sklearn','matplotlib','mercurion.train','mercurion.calibration',
              'mercurion.export_model','mercurion.preprocessing','mercurion.early_stopping',
              'mercurion.focal_loss','tests','pip']:
@@ -37,6 +39,7 @@ def main():
     args = parser.parse_args()
     image = json.loads(subprocess.check_output(["docker", "image", "inspect", args.image], text=True))[0]
     config = image["Config"]
+    assert image['Architecture'] == 'amd64' and image['Os'] == 'linux'
     assert config["User"] == "10021:10021"
     assert config["Cmd"] == ["python", "-m", "main"]
     assert not config.get("ExposedPorts"), "Worker must not invent a listening HTTP port"

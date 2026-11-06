@@ -28,4 +28,3 @@ services:
 networks:
   spectralume_network:
     external: true
-      

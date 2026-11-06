@@ -43,7 +43,8 @@ WORKDIR /app
 COPY --from=runtime-dependencies /opt/venv /opt/venv
 COPY --from=runtime-source /app /app
 COPY --from=model_package /weights.pt /thresholds.json /manifest.json ./model/
-RUN rm -rf /opt/venv/lib/python3.10/site-packages/pip /opt/venv/lib/python3.10/site-packages/pip-*.dist-info /opt/venv/bin/pip* && \
+RUN rm -rf /opt/venv/lib/python3.10/site-packages/pip /opt/venv/lib/python3.10/site-packages/pip-*.dist-info /opt/venv/bin/pip* \
+           /usr/local/lib/python3.10/site-packages/pip /usr/local/lib/python3.10/site-packages/pip-*.dist-info /usr/local/bin/pip* && \
     chmod 0555 /app/model && chmod 0444 /app/model/weights.pt /app/model/thresholds.json /app/model/manifest.json
 USER 10021:10021
 RUN python -c "from runtime import load_inference_runtime; m,d,p=load_inference_runtime(package_dir='/app/model'); r=p('CCO',m,d); assert len(r)==4 and all(0<=v['probability']<=1 for v in r.values())"
