@@ -3,12 +3,28 @@ services:
     container_name: mercurion_tox_21
     build:
       context: ../
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile
+      target: test
+      additional_contexts:
+        model_package: ${MODEL_PACKAGE_CONTEXT:?Set the exported model package directory}
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:?Set an explicit build version}
+        BUILD_REVISION: ${BUILD_REVISION:?Set the full source commit SHA}
     restart: unless-stopped
     networks:
       - spectralume_network
-    environment:      
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 15s
+    environment:
       PY_ENV: test
+      NATS_URL: ${NATS_URL:?Set the broker address on the selected network}
 networks:
   spectralume_network:
     external: true

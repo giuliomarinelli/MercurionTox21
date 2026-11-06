@@ -56,7 +56,8 @@ virtualenv. The commands above retain the legacy development/research requiremen
 T21-03 verified clean **Linux x86_64 / Python 3.10.11 / CPU** installs from separate
 [runtime and training/export hash locks](requirements/README.md). Use the documented
 profile procedure for that target; Windows/GPU compatibility is not implied by it.
-The existing application Dockerfiles still await consolidation in T21-04.
+The consolidated application targets use these Linux CPU profiles; see
+[container build and validation](docs/containers.md).
 
 ## Configure and start the application
 
@@ -221,19 +222,17 @@ unresolved. [Package, commands and evidence](docs/model-package.md). The focused
 python -m unittest tests.test_model_package tests.test_model_export tests.test_checkpoint_training tests.test_config tests.test_runtime tests.test_nats_requests tests.test_rdkit_api tests.test_training_pipeline
 ```
 
-## Containers and planned runtime boundary
+## Application containers
 
-[Dockerfile.test](Dockerfile.test) and [Dockerfile.staging](Dockerfile.staging) both start
-the service through module `main`. The test Dockerfile currently starts the application;
-its name does not mean it runs the test suite. The existing
-[Compose](docker_mt21/docker-compose.yml) supplies `PY_ENV=test` but not a complete startup
-configuration. Container consolidation and validation from a clean context remain pending.
-
-The target application artifact is an inference-service image containing only runtime
-code/dependencies and the compatible model package: weights, network definition,
-fingerprint settings, labels and thresholds. Training code/dependencies, datasets,
-notebooks and historical model copies stay out of the final staging/production image.
-This boundary is a requirement; the current `COPY . .` Dockerfiles do not yet enforce it.
+The root [Dockerfile](Dockerfile) has `test`, `staging` and `production` targets,
+with a positive [.dockerignore](.dockerignore) and explicit runtime copies.
+All run `python -m main` non-root and accept a separately exported model package
+as a named build context. The test target requires the 99 self-contained tests
+to pass in a separate build stage; no training, tests, datasets or historical
+outputs are copied into any final target. Staging/production configuration is
+external. [Build, validation and runtime instructions](docs/containers.md)
+explain metadata, read-only operation and the local Compose prerequisites.
+Remote CI and coordinated Web deployment remain subsequent roadmap tasks.
 
 The coordinated roadmap and design inventory are maintained in MercurionWeb. The linked
 baseline is immutable; later changes should be read on the corresponding Web work branch
