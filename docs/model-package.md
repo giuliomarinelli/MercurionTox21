@@ -62,7 +62,7 @@ There is no fallback to legacy files when an explicit package fails validation.
 Without `MODEL_PACKAGE_DIR`, the previous `outputs/models/best_model.pt` and two threshold
 files remain available for compatibility. That path does not acquire coherent-export or
 provenance guarantees merely because it still loads. The package mode is the path to use
-for the future runtime-only application image; packaging is completed in T21-04.
+for the runtime-only application image; see [T21-04 containers](containers.md).
 
 The verified runtime-only source snapshot and [dependency profiles](../requirements/README.md) exclude training,
 calibration/export modules, pandas, scikit-learn and matplotlib. Training and inference
@@ -83,7 +83,8 @@ Clean Linux x86_64/Python 3.10.11 CPU runtime and training/export installations 
 from the hash-locked closures with no index access during install, pinned setuptools and
 `--no-build-isolation`; `pip check` and native imports passed. The runtime has 23 resolved
 distributions and the training profile 39. Existing package versions were preserved;
-Torch uses its official CPU build. Original Dockerfiles still await T21-04 consolidation.
+Torch uses its official CPU build. [T21-04](containers.md) subsequently consolidated
+the Dockerfiles; the installation evidence in this section remains the T21-03 result.
 
 In the clean training environment, **74 tests passed**: package integrity/atomicity,
 real-weight synthetic export, deterministic inference, shared fingerprints, selected

@@ -70,3 +70,26 @@ The [local Compose example](../docker_mt21/docker-compose.yml) uses target
 `NATS_URL` and an existing `spectralume_network`. It does not create the broker.
 Web deployment references are migrated separately in T21-06; the old Web beta
 Compose is not a working deployment contract for these new containers yet.
+
+## Local evidence — 6 November 2026
+
+All three targets were built from Git archive source
+`a3a408ae34fd380d13fa4d8d866bc8b961992ffd`, version `t21-04-qa`, with the
+previously exported package `qa-6f19c86` (627 validation samples). The package
+is QA evidence, not an assigned release or a claim about scientific quality.
+The 99-case build gate passed. Image audit and isolated real NATS RPC/graceful
+stop passed for every target. The production image additionally passed the
+existing four-molecule/sixteen-prediction reference test offline, with its
+test files mounted read-only from outside the image.
+
+Synthetic context sentinels in Git/virtualenv/data/output/notebook/config/key
+paths stayed excluded (53 admitted files, 156754 bytes). Builds failed for a
+modified thresholds checksum, missing version and abbreviated source revision.
+Compose was resolved with an explicit empty env file and synthetic values.
+No user services, keys, dataset or original outputs were changed. QA-owned
+broker/worker containers and networks were removed. Images/build cache and
+logs remain local under `C:/Users/giuli/.codex/artifacts/t21-04`.
+
+These are local Linux amd64 CPU results. Remote CI is T21-05, Web deployment
+alignment T21-06, coordinated delivery T21-07 and integrated acceptance T21-08.
+No image was published or deployed; no branches were merged.
