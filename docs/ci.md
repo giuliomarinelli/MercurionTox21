@@ -36,9 +36,12 @@ to the owned broker's IP to bound the outage check without waiting for Docker
 DNS on a stopped container; the application still uses its ordinary NATS alias.
 Workers/brokers/networks are removed in `finally`; diagnostics are saved first.
 
-`artifacts/` is uploaded on success or failure, with a 14-day retention, under
-`tox21-<sha>-<run_attempt>`. It includes build/test logs, JSON results, smoke
-worker/broker logs, image identities and exported QA package. Upload failure
+Diagnostics are uploaded on success or failure, with a 14-day retention, under
+`tox21-reports-<sha>-<run_attempt>`: build/test logs, JSON results, smoke
+worker/broker logs and image identities. The successfully exported QA package
+is uploaded independently as `tox21-model-<sha>-<run_attempt>`, also when later
+verification fails. Test/export containers use the runner's UID/GID for writable
+bind mounts; a package access failure cannot prevent diagnostics upload. Upload failure
 fails verification too. Hard runner termination may prevent cleanup/upload;
 the hosted runner's isolated resources then expire with it. No registry release
 identity or coordinated Web delivery is established by a green CI run.

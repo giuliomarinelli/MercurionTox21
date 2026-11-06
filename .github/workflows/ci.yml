@@ -46,13 +46,14 @@ jobs:
         run: |
           set -euo pipefail
           for group in application model training; do
-            docker run --rm --network none --mount type=bind,src="$PWD/artifacts",dst=/reports tox21-validation /opt/venv/bin/python -B scripts/run_tests.py "$group" --report-json "/reports/$group.json" 2>&1 | tee "artifacts/tests-$group.log"
+            docker run --rm --network none --user "$(id -u):$(id -g)" --mount type=bind,src="$PWD/artifacts",dst=/reports tox21-validation /opt/venv/bin/python -B scripts/run_tests.py "$group" --report-json "/reports/$group.json" 2>&1 | tee "artifacts/tests-$group.log"
           done
       - name: Export QA package from selected weights and validation split only
+        id: export_package
         run: |
           set -euo pipefail
           mkdir -p artifacts/export
-          docker run --rm --network none \
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
             --mount type=bind,src="$PWD/outputs/models/best_model.pt",dst=/inputs/weights.pt,readonly \
             --mount type=bind,src="$PWD/data/processed/X_val.npy",dst=/inputs/X_val.npy,readonly \
             --mount type=bind,src="$PWD/data/processed/y_val.npy",dst=/inputs/y_val.npy,readonly \
@@ -60,6 +61,7 @@ jobs:
             tox21-validation /opt/venv/bin/python -B -m mercurion.export_model \
             --checkpoint /inputs/weights.pt --validation-root /inputs --output /export/package \
             --model-version ci-qa --export-revision "$GITHUB_SHA" 2>&1 | tee artifacts/export.log
+          test -r artifacts/export/package/manifest.json
       - name: Build and audit all runtime targets
         run: |
           set -euo pipefail
@@ -85,12 +87,23 @@ jobs:
             python3 -B scripts/smoke_container.py "tox21-$target" --target "$target" \
               --report-dir "artifacts/smoke-$target" | tee "artifacts/smoke-$target.log"
           done
-      - name: Upload diagnostics and QA package even on failure
+      - name: Upload diagnostics even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: tox21-${{ github.sha }}-${{ github.run_attempt }}
-          path: artifacts/
+          name: tox21-reports-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            artifacts/*.log
+            artifacts/*.json
+            artifacts/smoke-*/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload successfully exported QA package independently
+        if: ${{ always() && steps.export_package.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tox21-model-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/export/package/
           if-no-files-found: error
           retention-days: 14
   required:
