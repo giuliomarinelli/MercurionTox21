@@ -1,4 +1,6 @@
 from importlib.metadata import version
+import json
+import pickle
 from pathlib import Path
 import tempfile
 import unittest
@@ -100,6 +102,37 @@ class ExportTests(unittest.TestCase):
                 self.assertEqual(runtime_bits.dtype, np.float32)
                 self.assertEqual(runtime_bits.shape, (2048,))
                 np.testing.assert_array_equal(bits, runtime_bits)
+
+    def test_hash_valid_but_incompatible_weights_fail_strict_state_loading(self):
+        self.export()
+        torch.save({"model.0.weight": torch.zeros((1, 1))}, self.output / "weights.pt")
+        path = self.output / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["files"]["weights.pt"] = checksum(self.output / "weights.pt")
+        path.write_text(json.dumps(manifest))
+        with patch("torch.set_num_interop_threads"), self.assertRaises(RuntimeError):
+            load_inference_runtime(package_dir=self.output)
+
+    def test_hash_valid_but_corrupt_archive_is_not_treated_as_loaded_model(self):
+        self.export()
+        (self.output / "weights.pt").write_bytes(b"not-a-torch-archive")
+        path = self.output / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["files"]["weights.pt"] = checksum(self.output / "weights.pt")
+        path.write_text(json.dumps(manifest))
+        with patch("torch.set_num_interop_threads"), self.assertRaises(pickle.UnpicklingError):
+            load_inference_runtime(package_dir=self.output)
+
+    def test_incompatible_library_version_fails_before_weight_loading(self):
+        self.export()
+        path = self.output / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["libraries"]["numpy"] = "0.0.0"
+        path.write_text(json.dumps(manifest))
+        with patch("torch.set_num_interop_threads"), patch("torch.load") as load:
+            with self.assertRaises(ModelPackageError):
+                load_inference_runtime(package_dir=self.output)
+            load.assert_not_called()
 
 
 if __name__ == "__main__":

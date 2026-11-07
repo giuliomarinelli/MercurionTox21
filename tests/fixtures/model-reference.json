@@ -1,0 +1,109 @@
+{
+  "fixture_version": 1,
+  "source_commit": "6f19c869a0d99209fc78eb6a909d1f45897118a8",
+  "weights_sha256": "cbe915a168b83829e1766655dfd2d9d6ed7047638008f03e0759e0814f700104",
+  "thresholds_sha256": "075e33c82c3ea86ef429513a582ce21d2c37094f10a91aedb59a957005c46606",
+  "absolute_tolerance": 1e-06,
+  "cases": [
+    {
+      "smiles": "CCO",
+      "response": {
+        "SR-ATAD5": {
+          "probability": 0.1278623789548874,
+          "is_positive": false,
+          "threshold": 0.30000000000000004
+        },
+        "NR-AhR": {
+          "probability": 0.1809690296649933,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-MMP": {
+          "probability": 0.21122024953365326,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-p53": {
+          "probability": 0.17617134749889374,
+          "is_positive": false,
+          "threshold": 0.3500000000000001
+        }
+      }
+    },
+    {
+      "smiles": "c1ccccc1",
+      "response": {
+        "SR-ATAD5": {
+          "probability": 0.23221305012702942,
+          "is_positive": false,
+          "threshold": 0.30000000000000004
+        },
+        "NR-AhR": {
+          "probability": 0.31254491209983826,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-MMP": {
+          "probability": 0.3218858540058136,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-p53": {
+          "probability": 0.28424251079559326,
+          "is_positive": false,
+          "threshold": 0.3500000000000001
+        }
+      }
+    },
+    {
+      "smiles": "CC(=O)O",
+      "response": {
+        "SR-ATAD5": {
+          "probability": 0.09678546339273453,
+          "is_positive": false,
+          "threshold": 0.30000000000000004
+        },
+        "NR-AhR": {
+          "probability": 0.12883570790290833,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-MMP": {
+          "probability": 0.16197597980499268,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-p53": {
+          "probability": 0.1401558667421341,
+          "is_positive": false,
+          "threshold": 0.3500000000000001
+        }
+      }
+    },
+    {
+      "smiles": "C[C@H](O)F",
+      "response": {
+        "SR-ATAD5": {
+          "probability": 0.17725734412670135,
+          "is_positive": false,
+          "threshold": 0.30000000000000004
+        },
+        "NR-AhR": {
+          "probability": 0.21693362295627594,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-MMP": {
+          "probability": 0.2581484913825989,
+          "is_positive": false,
+          "threshold": 0.40000000000000013
+        },
+        "SR-p53": {
+          "probability": 0.22015278041362762,
+          "is_positive": false,
+          "threshold": 0.3500000000000001
+        }
+      }
+    }
+  ]
+}

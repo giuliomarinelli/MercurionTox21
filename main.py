@@ -33,6 +33,10 @@ PUBLIC_KEY: str | None = None
 ALGORITHM = "RS256"
 
 
+class ResponseDeliveryError(RuntimeError):
+    """Transport failure is not an application error to send as a second response."""
+
+
 def verify_jwt(token: str | None) -> dict[str, Any] | None:
     public_key = PUBLIC_KEY
     if not token or public_key is None:
@@ -58,7 +62,11 @@ def _extract_payload(msg: Msg) -> Any:
 async def _respond(msg: Msg, payload: dict[str, Any]) -> None:
     # A plain NATS publish has no reply subject.
     if msg.reply:
-        await msg.respond(json.dumps(payload).encode())
+        encoded = json.dumps(payload, allow_nan=False).encode()
+        try:
+            await msg.respond(encoded)
+        except Exception:
+            raise ResponseDeliveryError("NATS response delivery failed") from None
 
 
 async def _respond_invalid_request(
@@ -125,6 +133,8 @@ async def run(
 
             except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
                 await _respond_invalid_request(msg, e)
+            except ResponseDeliveryError:
+                raise
             except Exception:
                 await _respond(msg, {"error": "InternalError"})
 
@@ -154,6 +164,8 @@ async def run(
                 await _respond(msg, {"error": "Compound not found in PubChem"})
             except InvalidSmilesError:
                 await _respond(msg, {"error": "Invalid SMILES"})
+            except ResponseDeliveryError:
+                raise
             except Exception:
                 await _respond(msg, {"error": "InternalError"})
 
@@ -177,6 +189,8 @@ async def run(
                 await _respond_invalid_request(msg, e)
             except InvalidSmilesError:
                 await _respond(msg, {"error": "Invalid SMILES"})
+            except ResponseDeliveryError:
+                raise
             except Exception:
                 await _respond(msg, {"error": "InternalError"})
 
@@ -201,6 +215,8 @@ async def run(
                 await _respond_invalid_request(msg, e)
             except InvalidSmilesError:
                 await _respond(msg, {"error": "Invalid SMILES"})
+            except ResponseDeliveryError:
+                raise
             except Exception:
                 await _respond(msg, {"error": "InternalError"})
 
@@ -218,6 +234,8 @@ async def run(
 
             except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
                 await _respond_invalid_request(msg, e)
+            except ResponseDeliveryError:
+                raise
             except Exception:
                 await _respond(msg, {"error": "InternalError"})
 
