@@ -35,6 +35,11 @@ def get_config(
         "jwt_public_key_path": values.get("JWT_PUBLIC_KEY_PATH")
         or ("public.pem" if py_env == "production" else f"public.{py_env}.pem"),
     }
+    # Omission uses Pydantic's default; present empty/None/unknown values fail.
+    for field in ("auth_inference", "auth_rdkit_properties", "auth_rdkit_canonical_smiles",
+                  "auth_rdkit_same_structure", "auth_pubchem_iupac_name"):
+        if field.upper() in values:
+            raw[field] = values[field.upper()]
     try:
         return Configuration(**raw)
     except ValidationError as error:

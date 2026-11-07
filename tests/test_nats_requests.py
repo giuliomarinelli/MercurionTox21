@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from api.pcp import CompoundNotFoundError
 from api.rdkit import InvalidSmilesError
 from config import nats_subject
+from schemas.schemas import Configuration
 
 
 TOKEN = "test-access-token"
@@ -23,7 +24,7 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
         # Isolate startup from local configuration, JWT keys and model files.
-        config = SimpleNamespace(
+        config = Configuration(
             py_env="development",
             nats_url="nats://test.invalid:4222",
             version="test",
@@ -306,6 +307,9 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_public_mode_ignores_missing_and_invalid_tokens_on_all_endpoints(self):
         self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        self.callbacks.clear()
+        with self.assertRaises(StartupComplete):
+            await self.run_service()
         self.verify_jwt.side_effect = AssertionError("JWT verification must be skipped")
         for subject, valid in self.valid_requests().items():
             without_token = {key: value for key, value in valid.items() if key != "accessToken"}
@@ -321,6 +325,9 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_public_mode_preserves_payload_validation(self):
         self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        self.callbacks.clear()
+        with self.assertRaises(StartupComplete):
+            await self.run_service()
         for subject, valid in self.valid_requests().items():
             without_token = {key: value for key, value in valid.items() if key != "accessToken"}
             smiles_field = "a" if "a" in valid else "smiles"
@@ -362,6 +369,9 @@ class NatsRequestTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pubsub_without_reply_does_not_attempt_response(self):
         self.runtime["GLOBAL_SKIP_AUTH_FLAG"] = True
+        self.callbacks.clear()
+        with self.assertRaises(StartupComplete):
+            await self.run_service()
         for subject, valid in self.valid_requests().items():
             without_token = {key: value for key, value in valid.items() if key != "accessToken"}
             for raw in (json.dumps(without_token).encode(), b"{", b"{}"):

@@ -139,16 +139,15 @@ example `development.inference.tox21.smiles`. Requests may be direct JSON object
 envelopes containing `data`. Errors use an `error` string. Inference returns the four
 labels directly, without an extra `data` wrapper: `SR-ATAD5`, `NR-AhR`, `SR-MMP`, `SR-p53`.
 
-**Current behavior:** `GLOBAL_SKIP_AUTH_FLAG=True` in `main.py` enables public internal
-mode. Request payloads are still validated, but access tokens are ignored and a JWT key
-is not required for this mode. This is separate from Web user authentication. The code
-also has an authenticated path that verifies RS256 tokens with audience `mercurion-api`
-using the configured public key. Auth remains all-or-nothing and there is no environment
-variable that switches the global flag. When enabled, it requires a readable RSA public
-`.pem` file also in staging/production; no Base64 key input, hot reload or multi-key rotation
-is provided. Key failure stops startup, never enables public mode as a fallback. Adoption
-of coordinated rotation is deferred for the portfolio scope; Web's existing opt-in code
-is preserved. Do not interpret JWT code as proof that authentication is active.
+**Authentication:** `GLOBAL_SKIP_AUTH_FLAG=True` remains the public internal
+source default. Five [per-service environment overrides](docs/service-auth.md)
+now take precedence: `allow`, `require-jwt`, `disabled` (default when omitted).
+Invalid/empty values abort bootstrap through Pydantic. Effective policy governs
+both token requirements and JWT verification; any protected service requires a
+readable RSA public `.pem` file, including staging/production. No Base64 key
+input, rotation or new global switch. Without overrides behavior is unchanged.
+This is separate from Web login/session authentication; protecting an endpoint
+requires its consumers to supply a valid RS256 token for `mercurion-api`.
 
 ## Local model training and evaluation
 

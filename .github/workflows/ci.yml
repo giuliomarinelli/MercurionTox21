@@ -87,6 +87,8 @@ jobs:
             python3 -B scripts/smoke_container.py "tox21-$target" --target "$target" \
               --report-dir "artifacts/smoke-$target" | tee "artifacts/smoke-$target.log"
           done
+      - name: Mixed service authentication over real NATS with synthetic PEM
+        run: python3 -B scripts/smoke_auth.py tox21-production --report-dir artifacts/auth
       - name: Export and load candidate, generate SBOM and enforce critical vulnerability policy
         run: |
           python3 -B scripts/container_evidence.py --image tox21-production \
@@ -100,6 +102,7 @@ jobs:
             artifacts/*.log
             artifacts/*.json
             artifacts/smoke-*/
+            artifacts/auth/
             artifacts/container/*.json
             artifacts/container/*.log
           if-no-files-found: error

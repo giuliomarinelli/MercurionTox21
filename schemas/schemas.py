@@ -70,12 +70,32 @@ class SameStructureRequest(RdkitRequest):
     b: SmilesStr
 
 
+AuthPolicy = Literal['allow', 'require-jwt', 'disabled']
+
+
 class Configuration(BaseModel):
     py_env: Literal["development", "test", "staging", "production"]
     nats_url: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     version: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     jwt_public_key_path: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     model_package_dir: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)] | None = None
+    auth_inference: AuthPolicy = 'disabled'
+    auth_rdkit_properties: AuthPolicy = 'disabled'
+    auth_rdkit_canonical_smiles: AuthPolicy = 'disabled'
+    auth_rdkit_same_structure: AuthPolicy = 'disabled'
+    auth_pubchem_iupac_name: AuthPolicy = 'disabled'
+
+    def resolved_skip_auth(self, global_skip_auth: bool) -> dict[str, bool]:
+        """Resolve once at bootstrap; disabled means inherit, never disable RPC."""
+        policies = {
+            'inference.tox21.smiles': self.auth_inference,
+            'rdkit_api.get_molecule_properties': self.auth_rdkit_properties,
+            'rdkit_api.to_canonical_smiles': self.auth_rdkit_canonical_smiles,
+            'rdkit_api.are_same_structure': self.auth_rdkit_same_structure,
+            'pcp_api.get_iupac_name_from_smiles': self.auth_pubchem_iupac_name,
+        }
+        return {subject: global_skip_auth if policy == 'disabled' else policy == 'allow'
+                for subject, policy in policies.items()}
 
     @field_validator("nats_url")
     @classmethod

@@ -86,6 +86,9 @@ class PemAndImportTests(unittest.TestCase):
         self.assertTrue(callable(module["predict"]))
 
 
+from schemas.schemas import Configuration
+
+
 class LifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.stop = asyncio.Event()
@@ -106,7 +109,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         self.factory = Mock(return_value=self.client)
         self.loader = Mock(return_value=(Mock(), "cpu", Mock(return_value={})))
-        self.settings = SimpleNamespace(py_env="test", nats_url="nats://test.invalid:4222",
+        self.settings = Configuration(py_env="test", nats_url="nats://test.invalid:4222",
                                         version="synthetic", jwt_public_key_path="not-used.pem",
                                         model_package_dir=None)
         patcher = patch.multiple(application, NATS=self.factory, get_config=Mock(return_value=self.settings),
