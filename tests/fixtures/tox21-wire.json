@@ -1,41 +1,99 @@
 {
   "fixture_version": 1,
-  "environments": ["development", "test", "staging", "production"],
+  "environments": [
+    "development",
+    "test",
+    "staging",
+    "production"
+  ],
   "cases": [
     {
       "operation": "inferenceTop4",
       "subject": "inference.tox21.smiles",
-      "request": {"smiles": "CCO", "accessToken": "fixture-access-token"},
+      "request": {
+        "smiles": "CCO",
+        "accessToken": "fixture-access-token"
+      },
       "response": {
-        "SR-ATAD5": {"probability": 0.75, "threshold": 0.7, "is_positive": true},
-        "NR-AhR": {"probability": 0.5, "threshold": 0.5, "is_positive": false},
-        "SR-MMP": {"probability": 0.25, "threshold": 0.2, "is_positive": true},
-        "SR-p53": {"probability": 0.9, "threshold": 0.95, "is_positive": false}
+        "SR-ATAD5": {
+          "probability": 0.75,
+          "threshold": 0.7,
+          "is_positive": true
+        },
+        "NR-AhR": {
+          "probability": 0.5,
+          "threshold": 0.5,
+          "is_positive": false
+        },
+        "SR-MMP": {
+          "probability": 0.25,
+          "threshold": 0.2,
+          "is_positive": true
+        },
+        "SR-p53": {
+          "probability": 0.9,
+          "threshold": 0.95,
+          "is_positive": false
+        }
       }
     },
     {
       "operation": "rdkitGetMoleculeProperties",
       "subject": "rdkit_api.get_molecule_properties",
-      "request": {"smiles": "CCO", "accessToken": "fixture-access-token"},
-      "response": {"data": {"mwFreebase": 46.069, "alogp": -0.001, "hba": 1, "hbd": 1, "psa": 20.23, "rtb": 0}}
+      "request": {
+        "smiles": "CCO",
+        "accessToken": "fixture-access-token"
+      },
+      "response": {
+        "data": {
+          "mwFreebase": 46.069,
+          "alogp": -0.001,
+          "hba": 1,
+          "hbd": 1,
+          "psa": 20.23,
+          "rtb": 0
+        }
+      }
     },
     {
       "operation": "rdkitToCanonicalSmiles",
       "subject": "rdkit_api.to_canonical_smiles",
-      "request": {"smiles": "OCC", "accessToken": "fixture-access-token", "opts": {"isomeric": true, "kekule": false}},
-      "response": {"data": "CCO"}
+      "request": {
+        "smiles": "OCC",
+        "accessToken": "fixture-access-token",
+        "opts": {
+          "isomeric": true,
+          "kekule": false
+        }
+      },
+      "response": {
+        "data": "CCO"
+      }
     },
     {
       "operation": "rdkitAreSameStructure",
       "subject": "rdkit_api.are_same_structure",
-      "request": {"a": "CCO", "b": "OCC", "accessToken": "fixture-access-token"},
-      "response": {"data": true}
+      "request": {
+        "a": "CCO",
+        "b": "OCC",
+        "accessToken": "fixture-access-token"
+      },
+      "response": {
+        "data": true
+      }
     },
     {
       "operation": "pcpGetIupacNameFromSmiles",
       "subject": "pcp_api.get_iupac_name_from_smiles",
-      "request": {"smiles": "CCO", "accessToken": "fixture-access-token"},
-      "response": {"data": {"iupac_name": "ethanol"}}
+      "request": {
+        "smiles": "CCO",
+        "accessToken": "fixture-access-token"
+      },
+      "response": {
+        "data": {
+          "iupac_name": "ethanol"
+        }
+      }
     }
   ]
 }
