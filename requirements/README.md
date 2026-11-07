@@ -41,8 +41,9 @@ The verification installed from the downloaded distributions **offline** using
 `--no-index --find-links <download-directory>` in both commands. No compiler, extra
 unlocked build dependency or training library was needed in the runtime environment.
 Native Torch/RDKit imports and a prediction with the real package were verified there.
-The application Dockerfiles still use the legacy requirements until T21-04 adopts
-these profiles; the validation images are not a completed application image release.
+The consolidated application Dockerfile adopted these profiles in T21-04;
+[T21-05 CI](../docs/ci.md) repeats clean installs and container validation remotely.
+The original T21-03 validation images are not an application image release.
 
 ## Regenerate deliberately on the supported target
 

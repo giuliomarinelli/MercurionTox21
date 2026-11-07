@@ -1,0 +1,119 @@
+name: Tox21 CI
+
+on:
+  push:
+    branches: [develop, 'feature/**', 'release/**', 'hotfix/**', 'bugfix/**']
+  pull_request:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tox21-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/feature/') }}
+
+jobs:
+  verify:
+    name: Linux CPU application and containers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_VERSION: ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Static Python syntax (without importing modules)
+        run: |
+          mkdir -p artifacts
+          python3 - <<'PY' 2>&1 | tee artifacts/static.log
+          import ast, pathlib, subprocess
+          paths = subprocess.check_output(['git','ls-files','*.py'], text=True).splitlines()
+          for name in paths:
+              ast.parse(pathlib.Path(name).read_text(encoding='utf-8-sig'), filename=name)
+          print(f'Parsed {len(paths)} tracked Python files without import side effects')
+          PY
+      - name: Clean locked install and self-contained build gate
+        run: |
+          set -euo pipefail
+          docker build --progress plain --target validation --tag tox21-validation . 2>&1 | tee artifacts/build-validation.log
+      - name: Explicit isolated unittest groups
+        run: |
+          set -euo pipefail
+          for group in application model training; do
+            docker run --rm --network none --user "$(id -u):$(id -g)" --mount type=bind,src="$PWD/artifacts",dst=/reports tox21-validation /opt/venv/bin/python -B scripts/run_tests.py "$group" --report-json "/reports/$group.json" 2>&1 | tee "artifacts/tests-$group.log"
+          done
+      - name: Export QA package from selected weights and validation split only
+        id: export_package
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/export
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --mount type=bind,src="$PWD/outputs/models/best_model.pt",dst=/inputs/weights.pt,readonly \
+            --mount type=bind,src="$PWD/data/processed/X_val.npy",dst=/inputs/X_val.npy,readonly \
+            --mount type=bind,src="$PWD/data/processed/y_val.npy",dst=/inputs/y_val.npy,readonly \
+            --mount type=bind,src="$PWD/artifacts/export",dst=/export \
+            tox21-validation /opt/venv/bin/python -B -m mercurion.export_model \
+            --checkpoint /inputs/weights.pt --validation-root /inputs --output /export/package \
+            --model-version ci-qa --export-revision "$GITHUB_SHA" 2>&1 | tee artifacts/export.log
+          test -r artifacts/export/package/manifest.json
+      - name: Build and audit all runtime targets
+        run: |
+          set -euo pipefail
+          for target in test staging production; do
+            docker build --progress plain --target "$target" --build-context "model_package=$PWD/artifacts/export/package" \
+              --build-arg "BUILD_VERSION=$BUILD_VERSION" --build-arg "BUILD_REVISION=$GITHUB_SHA" \
+              --tag "tox21-$target" . 2>&1 | tee "artifacts/build-$target.log"
+            python3 -B scripts/check_container_image.py "tox21-$target" --target "$target" \
+              --version "$BUILD_VERSION" --revision "$GITHUB_SHA" | tee "artifacts/audit-$target.json"
+          done
+      - name: Real package numerical reference (offline)
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m --mount type=bind,src="$PWD/tests",dst=/qa/tests,readonly \
+            --env PYTHONPATH=/qa --entrypoint python tox21-production \
+            -B -m unittest tests.reference.model_reference 2>&1 | tee artifacts/reference.log
+      - name: Five subjects, broker recovery and graceful shutdown on every target
+        run: |
+          set -euo pipefail
+          docker pull nats@sha256:77a161c7d888a1791d5a46b50cd87a2f8466ce40a33cbb51238d227ace01e35a
+          for target in test staging production; do
+            python3 -B scripts/smoke_container.py "tox21-$target" --target "$target" \
+              --report-dir "artifacts/smoke-$target" | tee "artifacts/smoke-$target.log"
+          done
+      - name: Upload diagnostics even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tox21-reports-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            artifacts/*.log
+            artifacts/*.json
+            artifacts/smoke-*/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload successfully exported QA package independently
+        if: ${{ always() && steps.export_package.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tox21-model-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/export/package/
+          if-no-files-found: error
+          retention-days: 14
+  required:
+    name: Required gate
+    if: ${{ always() }}
+    needs: [verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail closed unless all verification succeeded
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: test "$VERIFY_RESULT" = success
