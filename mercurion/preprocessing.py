@@ -1,19 +1,9 @@
 import pandas as pd
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator
 import os
 from sklearn.model_selection import train_test_split
 from mercurion.labels import tox21_labels
-
-def smiles_to_fingerprint(smiles, radius=2, n_bits=2048):
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return None
-    generator = GetMorganGenerator(radius=radius, fpSize=n_bits)
-    fp = generator.GetFingerprint(mol)
-    bitstring = fp.ToBitString()
-    return np.array([int(bit) for bit in bitstring], dtype=np.uint8)
+from mercurion.fingerprints import smiles_to_fingerprint
 
 def preprocess_tox21(input_csv='data/raw/tox21.csv',
                      output_dir='data/processed/',

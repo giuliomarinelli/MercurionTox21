@@ -1,0 +1,11 @@
+# Direct runtime dependencies; preserve the existing versions.
+numpy==1.24.4
+torch==2.13.0
+rdkit==2024.3.5
+nats-py==2.9.0
+PubChemPy==1.0.5
+python-dotenv==1.2.2
+pydantic==2.10.6
+PyJWT==2.15.1
+cryptography==50.0.0
+typing_extensions==4.16.0

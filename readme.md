@@ -52,10 +52,11 @@ python -m pip install -r requirements.txt
 ```
 
 The virtualenv is created locally and ignored by Git. Do not copy another computer's
-virtualenv. The current Dockerfiles use Python `3.10.11`; a fresh-install verification of
-the Python/native dependency combination and a runtime-only dependency set are planned
-work, not results certified by these instructions. The current requirements also include
-model-development dependencies.
+virtualenv. The commands above retain the legacy development/research requirements.
+T21-03 verified clean **Linux x86_64 / Python 3.10.11 / CPU** installs from separate
+[runtime and training/export hash locks](requirements/README.md). Use the documented
+profile procedure for that target; Windows/GPU compatibility is not implied by it.
+The existing application Dockerfiles still await consolidation in T21-04.
 
 ## Configure and start the application
 
@@ -85,7 +86,7 @@ environment. `local-dev` is an explicit development version string, not a releas
 Launching the application requires an existing compatible model package; it does not
 require training again at every startup.
 
-The current loader expects these files relative to the working directory:
+Without `MODEL_PACKAGE_DIR`, the legacy loader expects these files relative to the working directory:
 
 - `outputs/models/best_model.pt`
 - `outputs/best_threshold.json`
@@ -93,9 +94,11 @@ The current loader expects these files relative to the working directory:
 
 Weights alone are insufficient: the network definition, fingerprint parameters, ordered
 labels and thresholds must match. The selected checkpoint and thresholds must be exported
-coherently. The current training script saves the best weights and thresholds at different
-points; a verified coherent export procedure remains planned work. This README does not
-certify the provenance or consistency of the model files currently checked in.
+coherently. [T21-03 export](docs/model-package.md) reloads a selected checkpoint, calibrates
+on validation inputs and publishes a new checked package. Set `MODEL_PACKAGE_DIR` to use
+it; an invalid explicit package never falls back to legacy files. Training also recalibrates
+final thresholds from its selected checkpoint. None of this retroactively certifies or
+changes the old model/threshold files currently checked in.
 
 Configuration is defined by [config.py](config.py) and `Configuration` in
 [schemas/schemas.py](schemas/schemas.py):
@@ -106,6 +109,7 @@ Configuration is defined by [config.py](config.py) and `Configuration` in
 | `NATS_URL` | Required nonblank `nats://` or `tls://` broker URL |
 | `VERSION` | Required nonblank string |
 | `JWT_PUBLIC_KEY_PATH` | Optional override; otherwise `public.<PY_ENV>.pem`, or `public.pem` for production |
+| `MODEL_PACKAGE_DIR` | Optional directory containing `weights.pt`, `thresholds.json`, `manifest.json`; validated before startup. Unset retains explicit legacy compatibility |
 
 Development/test optionally read `.env.development` / `.env.test`; process variables take
 precedence and dotenv values are literal, without interpolation. Select `PY_ENV` in the
@@ -193,8 +197,16 @@ RDKit cases, configuration, synthetic RSA signatures and fake-client lifecycle t
 [results and limits](docs/runtime-contract.md). A separate smoke check loaded the tracked
 weights and produced one CPU prediction without NATS/PubChem. The pipeline group was
 interrupted during a pandas native import and has no new result. Broader real-model
-regression, real NATS recovery, coherent export verification and dedicated application CI
-remain planned work.
+regression, real NATS recovery and dedicated application CI remain separate acceptance work.
+
+T21-03 subsequently passed **74 tests on clean Linux CPU** and **63 in a runtime-only
+environment**, including coherent export and selected-checkpoint regression. Its four
+original pipeline tests passed on Linux; the Windows scientific import issue remains
+unresolved. [Package, commands and evidence](docs/model-package.md). The focused suite is:
+
+```bash
+python -m unittest tests.test_model_package tests.test_model_export tests.test_checkpoint_training tests.test_config tests.test_runtime tests.test_nats_requests tests.test_rdkit_api tests.test_training_pipeline
+```
 
 ## Containers and planned runtime boundary
 

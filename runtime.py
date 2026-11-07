@@ -25,7 +25,7 @@ def load_public_key(path: str, *, skip_auth: bool) -> str | None:
     return material
 
 
-def load_inference_runtime() -> tuple[Any, str, Callable[..., Any]]:
+def load_inference_runtime(*, package_dir: str | Path | None = None) -> tuple[Any, str, Callable[..., Any]]:
     import torch
     from api.inference import load_thresholds, predict
     from mercurion.model import MercurionMLP
@@ -35,11 +35,23 @@ def load_inference_runtime() -> tuple[Any, str, Callable[..., Any]]:
         torch.set_num_interop_threads(1)
     except (AttributeError, TypeError):
         pass
-    thresholds = load_thresholds()
+    if package_dir is not None:
+        from importlib.metadata import version
+        from mercurion.model_package import ModelPackageError, validate_package
+        manifest, package_thresholds = validate_package(package_dir)
+        for name, expected in manifest["libraries"].items():
+            if version(name).split("+")[0] != expected.split("+")[0]:
+                raise ModelPackageError(f"Incompatible inference library: {name}")
+        thresholds = package_thresholds["per_label"]
+        weights = Path(package_dir) / "weights.pt"
+    else:
+        # Explicit legacy compatibility, not evidence of coherent model provenance.
+        thresholds = load_thresholds()
+        weights = Path("outputs/models/best_model.pt")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = MercurionMLP().to(device)
     model.load_state_dict(torch.load(
-        "outputs/models/best_model.pt", map_location=device, weights_only=True
+        weights, map_location=device, weights_only=True
     ))
     model.eval()
     return model, device, partial(predict, thresholds=thresholds)

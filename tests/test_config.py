@@ -85,6 +85,13 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(ConfigurationError):
             nats_subject(subjects[0], "unknown")
 
+    def test_model_package_selection_is_explicit_and_nonblank(self):
+        self.assertIsNone(self.config(self.values).model_package_dir)
+        self.assertEqual(self.config({**self.values, "MODEL_PACKAGE_DIR": "/models/release"}).model_package_dir,
+                         "/models/release")
+        with self.assertRaises(ConfigurationError):
+            self.config({**self.values, "MODEL_PACKAGE_DIR": " "})
+
 
 if __name__ == "__main__":
     unittest.main()

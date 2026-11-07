@@ -75,6 +75,7 @@ class Configuration(BaseModel):
     nats_url: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     version: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     jwt_public_key_path: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
+    model_package_dir: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)] | None = None
 
     @field_validator("nats_url")
     @classmethod

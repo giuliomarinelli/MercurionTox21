@@ -31,6 +31,7 @@ def get_config(
         "py_env": py_env,
         "nats_url": values.get("NATS_URL"),
         "version": values.get("VERSION"),
+        "model_package_dir": values.get("MODEL_PACKAGE_DIR"),
         "jwt_public_key_path": values.get("JWT_PUBLIC_KEY_PATH")
         or ("public.pem" if py_env == "production" else f"public.{py_env}.pem"),
     }
