@@ -11,7 +11,7 @@ GROUPS = {
     "application": ["tests.test_container_evidence", "tests.test_build_identity", "tests.test_config", "tests.test_runtime", "tests.test_nats_requests",
                     "tests.test_rdkit_api", "tests.test_pcp", "tests.test_inference", "tests.test_model_package"],
     "model": ["tests.test_model_export"],
-    "training": ["tests.test_training_pipeline", "tests.test_checkpoint_training"],
+    "training": ["tests.test_training_pipeline", "tests.test_training_contracts", "tests.test_checkpoint_training"],
 }
 
 

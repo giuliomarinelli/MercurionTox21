@@ -13,6 +13,8 @@ import numpy as np
 
 from mercurion import train
 from mercurion.model import MercurionMLP
+from mercurion.export_model import export_model
+from mercurion.model_package import checksum, validate_package
 
 
 class SelectedCheckpointTests(unittest.TestCase):
@@ -57,6 +59,21 @@ class SelectedCheckpointTests(unittest.TestCase):
             self.assertLess(float(expected.max()), 0.999)
             exported = json.loads((root / "outputs/best_thresholds.json").read_text())
             self.assertEqual(exported["per_label_thresholds"], train.find_per_label_thresholds(labels.numpy(), expected))
+            # Complete the selected-epoch -> calibrated, immutable package path.
+            validation = root / 'validation'
+            validation.mkdir()
+            np.save(validation / 'X_val.npy', features.numpy())
+            np.save(validation / 'y_val.npy', labels.numpy())
+            (validation / 'X_test.npy').write_bytes(b'held-out: must not be read')
+            (validation / 'y_test.npy').write_bytes(b'held-out: must not be read')
+            package = root / 'package'
+            export_model(root / 'outputs/models/best_model.pt', validation, package,
+                         model_version='synthetic-selected-epoch', export_revision='a' * 40)
+            manifest, thresholds = validate_package(package)
+            self.assertEqual(manifest['files']['weights.pt'], checksum(root / 'outputs/models/best_model.pt'))
+            self.assertEqual(thresholds['per_label'], exported['per_label_thresholds'])
+            common = json.loads((root / 'outputs/best_threshold.json').read_text())
+            self.assertEqual(thresholds['global'], common['best_threshold'])
 
 
 if __name__ == "__main__":

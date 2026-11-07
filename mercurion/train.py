@@ -7,6 +7,7 @@ from mercurion.model import MercurionMLP
 from mercurion.early_stopping import EarlyStopping
 from mercurion.focal_loss import FocalLoss
 from mercurion.labels import tox21_labels
+from mercurion.model_spec import MODEL_SPEC
 import json
 import random
 
@@ -25,10 +26,17 @@ torch.backends.cudnn.benchmark = False
 
 
 def load_data(batch_size=64):
-    X_train = np.load('data/processed/X_train.npy')
-    y_train = np.load('data/processed/y_train.npy')
-    X_val = np.load('data/processed/X_val.npy')
-    y_val = np.load('data/processed/y_val.npy')
+    X_train = np.load('data/processed/X_train.npy', allow_pickle=False)
+    y_train = np.load('data/processed/y_train.npy', allow_pickle=False)
+    X_val = np.load('data/processed/X_val.npy', allow_pickle=False)
+    y_val = np.load('data/processed/y_val.npy', allow_pickle=False)
+
+    for features, targets in ((X_train, y_train), (X_val, y_val)):
+        if (features.ndim != 2 or features.shape[0] == 0
+                or features.shape[1] != MODEL_SPEC['input_dim']
+                or targets.shape != (features.shape[0], len(tox21_labels))
+                or not np.isin(features, [0, 1]).all() or not np.isin(targets, [0, 1]).all()):
+            raise ValueError('Expected nonempty binary features and twelve aligned binary labels')
 
     X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train, dtype=torch.float32)

@@ -11,10 +11,20 @@ def preprocess_tox21(input_csv='data/raw/tox21.csv',
                      val_size=0.1,
                      random_state=42):
     
+    if (not np.isfinite(test_size) or not np.isfinite(val_size)
+            or test_size <= 0 or val_size <= 0 or test_size + val_size >= 1):
+        raise ValueError('Split fractions must be positive and sum to less than one')
     df = pd.read_csv(input_csv)
+    if not set(['smiles', *tox21_labels]).issubset(df.columns):
+        raise ValueError('Missing smiles or ordered Tox21 label columns')
 
-    df['fingerprint'] = df['smiles'].apply(smiles_to_fingerprint)
+    df['fingerprint'] = df['smiles'].apply(
+        lambda value: smiles_to_fingerprint(value) if isinstance(value, str) and value.strip() else None)
     df = df.dropna(subset=['fingerprint'])
+    if df.empty:
+        raise ValueError('No usable SMILES rows')
+    if not df[tox21_labels].isin([0, 1]).all().all():
+        raise ValueError('Retained rows require twelve binary labels; missing values are not negatives')
 
     X = np.stack(df['fingerprint'].to_list())
     y = df[tox21_labels].to_numpy(dtype=np.float32)

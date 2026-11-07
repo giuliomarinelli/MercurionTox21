@@ -1,5 +1,9 @@
 # T21-09 — Application regression suite
 
+T21-10 extends the training group: see the [training correctness contract and
+current evidence](training-contract.md). The counts below describe the original
+T21-09 delivery; current groups contain 21 training / 123 total tests.
+
 6 November 2026. Work on `feature/T21-09`, based on unmerged `feature/T21-03`.
 Authentication, model/data artifacts and the five request/result contracts are preserved.
 No broker, PubChem provider, deployment or full training run is required for these groups.

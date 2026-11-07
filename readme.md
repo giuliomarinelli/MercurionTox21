@@ -229,6 +229,11 @@ python -m unittest tests.test_model_package tests.test_model_export tests.test_c
 
 ## Application containers
 
+Local training correctness checks and their design constraints are documented
+in [T21-10](docs/training-contract.md). Run `python -B scripts/run_tests.py training`
+on the training profile: tiny synthetic inputs, no full-data retraining. This
+does not replace held-out scientific evaluation when publishing a new model.
+
 The root [Dockerfile](Dockerfile) has `test`, `staging` and `production` targets,
 with a positive [.dockerignore](.dockerignore) and explicit runtime copies.
 All run `python -m main` non-root and accept a separately exported model package
