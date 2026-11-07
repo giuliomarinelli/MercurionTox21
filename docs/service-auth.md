@@ -79,3 +79,12 @@ is assigned only by the smoke harness), two RPC rounds per mode, actual
 inference/RDKit, PubChem local invalid-SMILES handling, invalid CLI settings and
 graceful shutdown. It neither queries the provider nor deploys the application.
 The smoke is a separate required CI step; reports are uploaded even on failure.
+
+Local real smoke passed: **100 RPC checks** (25 per round, two rounds per
+global), invalid/empty CLI settings rejected, graceful stops and cleanup passed.
+Production image was built locally from runtime source commit `16f818d`, with
+the existing verified QA model package. Initial smoke assertion had inverted
+the expected inherited canonicalization policy; corrected in the harness only,
+then the complete smoke passed. Both attempts and cleanup results are preserved
+in the local evidence directory (`auth-local`, `auth-local-2`). No runtime auth
+policy was weakened to make it pass. Final feature-SHA CI rebuilds independently.

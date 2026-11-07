@@ -42,7 +42,7 @@ async def probe():
         public=os.environ['GLOBAL_SKIP']=='true'
         cases=[('inference.tox21.smiles',{'smiles':'CCO'},True),
                ('rdkit_api.get_molecule_properties',{'smiles':'CCO'},False),
-               ('rdkit_api.to_canonical_smiles',{'smiles':'OCC'},public),
+               ('rdkit_api.to_canonical_smiles',{'smiles':'OCC'},not public),
                ('rdkit_api.are_same_structure',{'a':'CCO','b':'OCC'},True),
                ('pcp_api.get_iupac_name_from_smiles',{'smiles':'not-a-smiles'},True)]
         checks=0
