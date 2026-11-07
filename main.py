@@ -90,7 +90,8 @@ async def run(
     ready.clear()
     config = get_config()
     build_identity = read_build_identity()
-    PUBLIC_KEY = load_public_key(config.jwt_public_key_path, skip_auth=GLOBAL_SKIP_AUTH_FLAG)
+    skip_auth = config.resolved_skip_auth(GLOBAL_SKIP_AUTH_FLAG)
+    PUBLIC_KEY = load_public_key(config.jwt_public_key_path, skip_auth=all(skip_auth.values()))
     model, device, predict = load_inference_runtime(package_dir=config.model_package_dir)
     env = config.py_env
     nc = NATS()
@@ -123,9 +124,9 @@ async def run(
         async def inference_cb(msg: Msg) -> None:
             try:
                 payload = _extract_payload(msg)
-                req = InferenceRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                req = InferenceRequest.model_validate(payload, context={"skip_auth": skip_auth["inference.tox21.smiles"]})
 
-                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                if not skip_auth["inference.tox21.smiles"] and not verify_jwt(req.accessToken):
                     await _respond(msg, {"error": "Invalid or expired access token"})
                     return
 
@@ -150,9 +151,9 @@ async def run(
         async def iupac_name_cb(msg: Msg) -> None:
             try:
                 payload = _extract_payload(msg)
-                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": skip_auth["pcp_api.get_iupac_name_from_smiles"]})
 
-                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                if not skip_auth["pcp_api.get_iupac_name_from_smiles"] and not verify_jwt(req.accessToken):
                     await _respond(msg, {"error": "Invalid or expired access token"})
                     return
 
@@ -177,9 +178,9 @@ async def run(
         async def rdkit_props_cb(msg: Msg) -> None:
             try:
                 payload = _extract_payload(msg)
-                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": skip_auth["rdkit_api.get_molecule_properties"]})
 
-                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                if not skip_auth["rdkit_api.get_molecule_properties"] and not verify_jwt(req.accessToken):
                     await _respond(msg, {"error": "Invalid or expired access token"})
                     return
 
@@ -198,10 +199,10 @@ async def run(
         async def rdkit_canon_cb(msg: Msg) -> None:
             try:
                 payload = _extract_payload(msg)
-                req = CanonicalSmilesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                req = CanonicalSmilesRequest.model_validate(payload, context={"skip_auth": skip_auth["rdkit_api.to_canonical_smiles"]})
                 opts = req.opts or CanonicalSmilesOptions()
 
-                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                if not skip_auth["rdkit_api.to_canonical_smiles"] and not verify_jwt(req.accessToken):
                     await _respond(msg, {"error": "Invalid or expired access token"})
                     return
 
@@ -224,9 +225,9 @@ async def run(
         async def rdkit_same_cb(msg: Msg) -> None:
             try:
                 payload = _extract_payload(msg)
-                req = SameStructureRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                req = SameStructureRequest.model_validate(payload, context={"skip_auth": skip_auth["rdkit_api.are_same_structure"]})
 
-                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                if not skip_auth["rdkit_api.are_same_structure"] and not verify_jwt(req.accessToken):
                     await _respond(msg, {"error": "Invalid or expired access token"})
                     return
 

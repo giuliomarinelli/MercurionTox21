@@ -1,5 +1,9 @@
 # T21-02 — Runtime contract
 
+**T21-11 update:** [per-service overrides](service-auth.md) supersede the
+all-or-nothing-only description below. The historical T21-02 scope is retained;
+PEM, JWT audience and lifecycle boundaries still apply.
+
 6 November 2026. Implemented on `feature/T21-02`, based on the T21-01 documentation branch.
 No merge, deployment, real key rotation or external service startup is part of this task.
 

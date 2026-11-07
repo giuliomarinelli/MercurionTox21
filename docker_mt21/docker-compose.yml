@@ -24,6 +24,11 @@ services:
     stop_grace_period: 15s
     environment:
       PY_ENV: test
+      AUTH_INFERENCE: ${AUTH_INFERENCE-disabled}
+      AUTH_RDKIT_PROPERTIES: ${AUTH_RDKIT_PROPERTIES-disabled}
+      AUTH_RDKIT_CANONICAL_SMILES: ${AUTH_RDKIT_CANONICAL_SMILES-disabled}
+      AUTH_RDKIT_SAME_STRUCTURE: ${AUTH_RDKIT_SAME_STRUCTURE-disabled}
+      AUTH_PUBCHEM_IUPAC_NAME: ${AUTH_PUBCHEM_IUPAC_NAME-disabled}
       NATS_URL: ${NATS_URL:?Set the broker address on the selected network}
 networks:
   spectralume_network:
