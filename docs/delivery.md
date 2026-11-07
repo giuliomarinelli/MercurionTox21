@@ -63,5 +63,5 @@ not by treating this historical report as the current scan or removing its findi
 
 The expanded suite has **107 self-contained cases**, **93 application cases**,
 model/export 9 and synthetic training 5. The reference group stays separate.
-Coordinated delivery remains blocked pending security remediation and actual Web
-image records. Transport QA does not close T21-07 or prove deployment acceptance.
+Coordinated delivery requires a passing security gate and actual Web image records.
+Transport QA alone does not close T21-07 or prove deployment acceptance.

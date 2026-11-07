@@ -252,6 +252,6 @@ until integration:
 
 See [LICENSE.md](LICENSE.md).
 
-T21-07 adds [candidate archives and security evidence](docs/delivery.md). Delivery
-remains blocked by the inherited critical-vulnerability gate; a functional CI result
-does not imply release approval.
+T21-07 adds [candidate archives and security evidence](docs/delivery.md). Eligibility
+is enforced by the inherited critical-vulnerability gate; functional CI alone does
+not imply release approval. Coordinated delivery also requires the Web image records.
