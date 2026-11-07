@@ -38,7 +38,7 @@ that the repository's default branch contains the same runtime or test inventory
 On Windows PowerShell:
 
 ```powershell
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
@@ -46,7 +46,7 @@ python -m pip install -r requirements.txt
 On Linux/macOS:
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
@@ -56,6 +56,11 @@ virtualenv. The commands above retain the legacy development/research requiremen
 T21-03 verified clean **Linux x86_64 / Python 3.10.11 / CPU** installs from separate
 [runtime and training/export hash locks](requirements/README.md). Use the documented
 profile procedure for that target; Windows/GPU compatibility is not implied by it.
+The current [security baseline](docs/security-baseline.md) moves the verified
+container target to Python 3.11.18/Debian 13 and Pillow 13.0.0 while preserving
+scientific-library versions. Legacy Python 3.10 virtualenvs are not upgraded by
+checkout; use a separate matching environment. Host Windows compatibility remains
+a separate check, not a consequence of these setup examples.
 The consolidated application targets use these Linux CPU profiles; see
 [container build and validation](docs/containers.md).
 

@@ -46,7 +46,7 @@ makes verification and Required gate red. Only JSON/log diagnostics are uploaded
 **not image archives**. A later coordinated manifest must include real records
 for both Web images; missing components are explicit, never substituted by Tox21.
 
-## Current block — 6 November 2026
+## Historical block — 6 November 2026
 
 The T21-04 production baseline scan found **18 critical package/advisory
 occurrences**, not 18 unique CVE IDs: 13 OS-package occurrences and five Pillow
@@ -56,6 +56,10 @@ visible. Existing base/dependency pins were retained, not silently upgraded.
 Updating the OS/Python base and Pillow compatibility requires a separate baseline
 change and native/model regression validation. No exception, filter or reduced
 threshold is adopted to obtain a green result. This blocks approved delivery.
+
+The [7 November baseline revision](security-baseline.md) replaces those OS/Python/
+Pillow pins. Eligibility is established by the gate on the exact resulting image,
+not by treating this historical report as the current scan or removing its findings.
 
 The expanded suite has **107 self-contained cases**, **93 application cases**,
 model/export 9 and synthetic training 5. The reference group stays separate.

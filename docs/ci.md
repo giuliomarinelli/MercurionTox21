@@ -5,7 +5,7 @@ release/hotfix/bugfix pushes, PRs targeting develop/master and manual dispatch.
 It never publishes images, deploys, merges branches or needs personal secrets.
 Only read access to repository contents is granted; actions are pinned by SHA.
 
-The Linux amd64 CPU verification job uses the pinned Python 3.10.11 Docker
+The Linux amd64 CPU verification job uses the pinned Python 3.11.18 Docker
 base and hash-locked profiles. A fresh hosted runner performs clean dependency
 installation (no persistent dependency or image cache). Steps fail on nonzero
 exit; piped commands retain `pipefail`. The stable **Required gate** runs even

@@ -23,7 +23,7 @@ Version must be nonblank and revision a complete 40-character Git SHA; labels
 record both and the source repository. These arguments do not establish a
 release or prove that a dirty checkout matches the supplied revision.
 
-The pinned Python 3.10.11 base and hash-locked Linux CPU dependency profiles
+The pinned Python 3.11.18/Debian 13 base and hash-locked Linux CPU dependency profiles
 are shared. `test` additionally requires the validation stage to pass the
 107 self-contained unittest cases. Training dependencies and synthetic tests
 exist only in that stage. All final images contain the same runtime code and

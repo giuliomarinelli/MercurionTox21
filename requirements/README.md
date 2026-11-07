@@ -1,9 +1,14 @@
 # Dependency profiles — T21-03
 
-The supported clean-install target verified here is **Linux x86_64, CPython 3.10.11,
+The current clean-install target is **Linux x86_64, CPython 3.11.18,
 CPU**. The existing Docker base is pinned for verification to
-`python:3.10.11-slim@sha256:fd86924ba14682eb11a3c244f60a35b5dfe3267cbf26d883fb5c14813ce926f1`.
+`python:3.11.18-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79`.
 This is a tested baseline, not a claim about all Python/platform combinations or GPU.
+
+[Security baseline revision](../docs/security-baseline.md): Pillow 13.0.0 is the
+only changed library version; native hashes now select cp311 wheels. The original
+T21-03 offline-install evidence below describes the previous Python 3.10 profile,
+not a claim that the updated lock files are byte-identical to it.
 
 | File | Purpose |
 | --- | --- |
