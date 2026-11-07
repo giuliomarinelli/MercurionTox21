@@ -1,17 +1,16 @@
 import asyncio
-import torch    
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
-from api.inference import predict
 from api.rdkit import (
-    get_molecule_properties, 
-    to_canonical_smiles, 
+    get_molecule_properties,
+    to_canonical_smiles,
     are_same_structure,
     InvalidSmilesError,
 )
 from api.pcp import CompoundNotFoundError, get_iupac_name_from_smiles
-from config import get_config
-from mercurion.model import MercurionMLP
+from config import ConfigurationError, get_config, nats_subject
+from runtime import load_inference_runtime, load_public_key
+import signal
 import json
 from schemas.schemas import (
     InferenceRequest,
@@ -29,35 +28,7 @@ from typing import Any
 
 GLOBAL_SKIP_AUTH_FLAG = True
 
-start_ns = time_ns()
-print('[MercurionTox21 > main] Starting application...')
-
-# 🔐 Hardening CPU: limitiamo i thread Torch ad 1 per evitare oversubscription
-torch.set_num_threads(1)
-try:
-    torch.set_num_interop_threads(1)  # Non tutte le versioni di torch hanno questa API
-except (AttributeError, TypeError):
-    pass
-
-config = get_config()
-
-env = config.py_env or "development"
-nats_url = config.nats_url or "nats://localhost:4223"
-version = config.version or "unknown"
-
 PUBLIC_KEY: str | None = None
-if not GLOBAL_SKIP_AUTH_FLAG:
-    try:
-        with open(config.jwt_public_key_path, "r") as f:
-            PUBLIC_KEY = f.read()
-    except OSError as e:
-        print(
-            f"[MercurionTox21 > main] FATAL: unable to read JWT public key file "
-            f"'{config.jwt_public_key_path}': {e}",
-            file=sys.stderr,
-        )
-        print("\n[MercurionTox21 > main] Python process terminated with exit_code = 1\n")
-        sys.exit(1)
 
 ALGORITHM = "RS256"
 
@@ -101,178 +72,212 @@ async def _respond_invalid_request(
     await _respond(msg, {"error": message})
 
 
-def _rdkit_ns(fn_name: str) -> str:
-    if env != "production":
-        return f"{env}.rdkit_api.{fn_name}"
-    return f"rdkit_api.{fn_name}"
-
-def _pcp_ns(fn_name: str) -> str:
-    if env != "production":
-        return f"{env}.pcp_api.{fn_name}"
-    return f"pcp_api.{fn_name}"
-
-
-# ✔️ Main NATS client
-async def run() -> None:
+async def run(
+    *, stop_event: asyncio.Event | None = None, ready_event: asyncio.Event | None = None
+) -> None:
+    global PUBLIC_KEY
+    started = time_ns()
+    stop = stop_event if stop_event is not None else asyncio.Event()
+    ready = ready_event if ready_event is not None else asyncio.Event()
+    ready.clear()
+    config = get_config()
+    PUBLIC_KEY = load_public_key(config.jwt_public_key_path, skip_auth=GLOBAL_SKIP_AUTH_FLAG)
+    model, device, predict = load_inference_runtime()
+    env = config.py_env
     nc = NATS()
-    await nc.connect(nats_url)
+    subscriptions_ready = False
+    shutting_down = False
+    unexpected_close = False
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = MercurionMLP().to(device)
-    model.load_state_dict(
-        torch.load(
-            'outputs/models/best_model.pt',
-            map_location=device,
-            weights_only=True
+    async def disconnected() -> None:
+        ready.clear()
+
+    async def reconnected() -> None:
+        if subscriptions_ready and not shutting_down and not stop.is_set():
+            ready.set()
+
+    async def closed() -> None:
+        nonlocal unexpected_close
+        ready.clear()
+        if not shutting_down:
+            unexpected_close = True
+            stop.set()
+
+    try:
+        await nc.connect(
+            config.nats_url, disconnected_cb=disconnected,
+            reconnected_cb=reconnected, closed_cb=closed,
         )
-    )
-    model.eval()
+        # =========================
+        # INFERENCE CALLBACK
+        # =========================
+        async def inference_cb(msg: Msg) -> None:
+            try:
+                payload = _extract_payload(msg)
+                req = InferenceRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
 
-    # =========================
-    # INFERENCE CALLBACK
-    # =========================
-    async def inference_cb(msg: Msg) -> None:
+                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                    await _respond(msg, {"error": "Invalid or expired access token"})
+                    return
+
+                result = predict(req.smiles, model, device)
+                await _respond(msg, result)
+
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except Exception:
+                await _respond(msg, {"error": "InternalError"})
+
+        nats_inference_ns = nats_subject("inference.tox21.smiles", env)
+
+        await nc.subscribe(nats_inference_ns, cb=inference_cb)
+
+        # =========================
+        # PCP CALLBACKS
+        # =========================
+
+        async def iupac_name_cb(msg: Msg) -> None:
+            try:
+                payload = _extract_payload(msg)
+                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+
+                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                    await _respond(msg, {"error": "Invalid or expired access token"})
+                    return
+
+                iupac_name = await asyncio.to_thread(get_iupac_name_from_smiles, req.smiles)
+                await _respond(msg, {"data": {"iupac_name": iupac_name}})
+
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except CompoundNotFoundError:
+                await _respond(msg, {"error": "Compound not found in PubChem"})
+            except InvalidSmilesError:
+                await _respond(msg, {"error": "Invalid SMILES"})
+            except Exception:
+                await _respond(msg, {"error": "InternalError"})
+
+        # =========================
+        # RDKIT CALLBACKS
+        # =========================
+
+        async def rdkit_props_cb(msg: Msg) -> None:
+            try:
+                payload = _extract_payload(msg)
+                req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+
+                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                    await _respond(msg, {"error": "Invalid or expired access token"})
+                    return
+
+                props = get_molecule_properties(req.smiles).to_dict()
+                await _respond(msg, {"data": props})
+
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except InvalidSmilesError:
+                await _respond(msg, {"error": "Invalid SMILES"})
+            except Exception:
+                await _respond(msg, {"error": "InternalError"})
+
+        async def rdkit_canon_cb(msg: Msg) -> None:
+            try:
+                payload = _extract_payload(msg)
+                req = CanonicalSmilesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+                opts = req.opts or CanonicalSmilesOptions()
+
+                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                    await _respond(msg, {"error": "Invalid or expired access token"})
+                    return
+
+                canon = to_canonical_smiles(
+                    req.smiles,
+                    isomeric=opts.isomeric,
+                    kekule=opts.kekule,
+                )
+                await _respond(msg, {"data": canon})
+
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except InvalidSmilesError:
+                await _respond(msg, {"error": "Invalid SMILES"})
+            except Exception:
+                await _respond(msg, {"error": "InternalError"})
+
+        async def rdkit_same_cb(msg: Msg) -> None:
+            try:
+                payload = _extract_payload(msg)
+                req = SameStructureRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
+
+                if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
+                    await _respond(msg, {"error": "Invalid or expired access token"})
+                    return
+
+                same = are_same_structure(req.a, req.b)
+                await _respond(msg, {"data": same})
+
+            except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
+                await _respond_invalid_request(msg, e)
+            except Exception:
+                await _respond(msg, {"error": "InternalError"})
+
+        nats_rdkit_props_ns = nats_subject("rdkit_api.get_molecule_properties", env)
+        nats_rdkit_canon_ns = nats_subject("rdkit_api.to_canonical_smiles", env)
+        nats_rdkit_same_ns = nats_subject("rdkit_api.are_same_structure", env)
+        nats_iupac_name_ns = nats_subject("pcp_api.get_iupac_name_from_smiles", env)
+
+        await nc.subscribe(nats_rdkit_props_ns, cb=rdkit_props_cb)
+        await nc.subscribe(nats_rdkit_canon_ns, cb=rdkit_canon_cb)
+        await nc.subscribe(nats_rdkit_same_ns, cb=rdkit_same_cb)
+        await nc.subscribe(nats_iupac_name_ns, cb=iupac_name_cb)
+
+        await nc.flush(timeout=5)
+        subscriptions_ready = True
+        if not nc.is_connected:
+            raise ConnectionError("NATS disconnected during startup")
+        ready.set()
+        print(f"[MercurionTox21 > main] Ready in {(time_ns() - started) / 1_000_000:.1f}ms")
+        print(f"[MercurionTox21 > main] Environment: {env}; device: {device}; version: {config.version}")
+        await stop.wait()
+        if unexpected_close:
+            raise ConnectionError("NATS connection closed")
+    finally:
+        shutting_down = True
+        ready.clear()
+        if not nc.is_closed:
+            try:
+                if nc.is_connected:
+                    await asyncio.wait_for(nc.drain(), timeout=5)
+            except Exception:
+                print("[MercurionTox21 > main] Drain incomplete; closing connection", file=sys.stderr)
+            finally:
+                await asyncio.wait_for(nc.close(), timeout=5)
+
+
+async def main() -> None:
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    installed = []
+    for signum in (signal.SIGINT, signal.SIGTERM):
         try:
-            payload = _extract_payload(msg)
-            req = InferenceRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
-
-            if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
-                await _respond(msg, {"error": "Invalid or expired access token"})
-                return
-
-            result = predict(req.smiles, model, device)
-            await _respond(msg, result)
-
-        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            await _respond_invalid_request(msg, e)
-        except Exception:
-            await _respond(msg, {"error": "InternalError"})
-
-    if env != 'production':
-        nats_inference_ns = f"{env}.inference.tox21.smiles"
-    else:
-        nats_inference_ns = "inference.tox21.smiles"
-
-    await nc.subscribe(nats_inference_ns, cb=inference_cb)
-    
-    # =========================
-    # PCP CALLBACKS
-    # =========================
-    
-    async def iupac_name_cb(msg: Msg) -> None:
-        try:
-            payload = _extract_payload(msg)
-            req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
-
-            if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
-                await _respond(msg, {"error": "Invalid or expired access token"})
-                return
-
-            iupac_name = await asyncio.to_thread(get_iupac_name_from_smiles, req.smiles)
-            await _respond(msg, {"data": {"iupac_name": iupac_name}})
-
-        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            await _respond_invalid_request(msg, e)
-        except CompoundNotFoundError:
-            await _respond(msg, {"error": "Compound not found in PubChem"})
-        except InvalidSmilesError:
-            await _respond(msg, {"error": "Invalid SMILES"})
-        except Exception:
-            await _respond(msg, {"error": "InternalError"})
-
-    # =========================
-    # RDKIT CALLBACKS
-    # =========================
-
-    async def rdkit_props_cb(msg: Msg) -> None:
-        try:
-            payload = _extract_payload(msg)
-            req = MoleculePropertiesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
-
-            if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
-                await _respond(msg, {"error": "Invalid or expired access token"})
-                return
-
-            props = get_molecule_properties(req.smiles).to_dict()
-            await _respond(msg, {"data": props})
-
-        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            await _respond_invalid_request(msg, e)
-        except InvalidSmilesError:
-            await _respond(msg, {"error": "Invalid SMILES"})
-        except Exception:
-            await _respond(msg, {"error": "InternalError"})
-
-    async def rdkit_canon_cb(msg: Msg) -> None:
-        try:
-            payload = _extract_payload(msg)
-            req = CanonicalSmilesRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
-            opts = req.opts or CanonicalSmilesOptions()
-
-            if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
-                await _respond(msg, {"error": "Invalid or expired access token"})
-                return
-
-            canon = to_canonical_smiles(
-                req.smiles,
-                isomeric=opts.isomeric,
-                kekule=opts.kekule,
-            )
-            await _respond(msg, {"data": canon})
-
-        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            await _respond_invalid_request(msg, e)
-        except InvalidSmilesError:
-            await _respond(msg, {"error": "Invalid SMILES"})
-        except Exception:
-            await _respond(msg, {"error": "InternalError"})
-
-    async def rdkit_same_cb(msg: Msg) -> None:
-        try:
-            payload = _extract_payload(msg)
-            req = SameStructureRequest.model_validate(payload, context={"skip_auth": GLOBAL_SKIP_AUTH_FLAG})
-
-            if not GLOBAL_SKIP_AUTH_FLAG and not verify_jwt(req.accessToken):
-                await _respond(msg, {"error": "Invalid or expired access token"})
-                return
-
-            same = are_same_structure(req.a, req.b)
-            await _respond(msg, {"data": same})
-
-        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            await _respond_invalid_request(msg, e)
-        except Exception:
-            await _respond(msg, {"error": "InternalError"})
-
-    nats_rdkit_props_ns = _rdkit_ns("get_molecule_properties")
-    nats_rdkit_canon_ns = _rdkit_ns("to_canonical_smiles")
-    nats_rdkit_same_ns = _rdkit_ns("are_same_structure")
-    nats_iupac_name_ns = _pcp_ns("get_iupac_name_from_smiles")
-
-    await nc.subscribe(nats_rdkit_props_ns, cb=rdkit_props_cb)
-    await nc.subscribe(nats_rdkit_canon_ns, cb=rdkit_canon_cb)
-    await nc.subscribe(nats_rdkit_same_ns, cb=rdkit_same_cb)
-    await nc.subscribe(nats_iupac_name_ns, cb=iupac_name_cb)
-    
-    stop_ns = time_ns()
-    diff_ms = (stop_ns - start_ns) / 1000000
-
-    
-    print(f"[MercurionTox21 > main] Application started in: {diff_ms}ms")
-    print(f"[MercurionTox21 > main] Environment: {env.upper()}")
-    print(f"[MercurionTox21 > main] Device: {device.upper()}")
-    print(f"[MercurionTox21 > main] NATS url: {nats_url}")
-    print(f"[MercurionTox21 > main] Version: {version}")
-    print(f"[MercurionTox21 > main > inference] ✅ Subscribed on '{nats_inference_ns}'...")
-    print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_props_ns}'...")
-    print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_canon_ns}'...")
-    print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_rdkit_same_ns}'...")
-    print(f"[MercurionTox21 > main > rdkit] ✅ Subscribed on '{nats_iupac_name_ns}'...")
-
-
-    while True:
-        await asyncio.sleep(1)
+            loop.add_signal_handler(signum, stop.set)
+            installed.append(signum)
+        except NotImplementedError:
+            # Windows uses asyncio.run's KeyboardInterrupt cancellation path.
+            pass
+    try:
+        await run(stop_event=stop)
+    finally:
+        for signum in installed:
+            loop.remove_signal_handler(signum)
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+    except Exception as error:
+        message = str(error) if isinstance(error, ConfigurationError) else type(error).__name__
+        print(f"[MercurionTox21 > main] FATAL: {message}", file=sys.stderr)
+        sys.exit(1)

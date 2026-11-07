@@ -102,17 +102,17 @@ Configuration is defined by [config.py](config.py) and `Configuration` in
 
 | Setting | Current behavior |
 | --- | --- |
-| `PY_ENV` | Defaults to `development`; use the documented lowercase environment names |
-| `NATS_URL` | Required string in the configuration schema |
-| `VERSION` | Required string in the configuration schema |
+| `PY_ENV` | Exact lowercase `development`, `test`, `staging`, `production`; default `development`; other/blank values fail |
+| `NATS_URL` | Required nonblank `nats://` or `tls://` broker URL |
+| `VERSION` | Required nonblank string |
 | `JWT_PUBLIC_KEY_PATH` | Optional override; otherwise `public.<PY_ENV>.pem`, or `public.pem` for production |
 
-The loader chooses `.env.development`, `.env.test`, `.env.staging` or `.env` for
-`development`, `test`, `staging` or `production`, respectively. Existing process variables
-take precedence over dotenv values. Set `PY_ENV` in the process before startup so the
-correct file is selected. No personal configuration or key file is supplied by the clone;
-the explicit process variables above avoid relying on an existing dotenv file. Strict
-validation of the environment name and the full runtime contract are scheduled separately.
+Development/test optionally read `.env.development` / `.env.test`; process variables take
+precedence and dotenv values are literal, without interpolation. Select `PY_ENV` in the
+process before startup. Staging/production never read dotenv files: supply process
+variables explicitly. This changes the previous `.env.staging` / `.env` behavior; the
+deployment definitions still require alignment. No personal configuration or key file is
+supplied by the clone. See the [T21-02 runtime contract](docs/runtime-contract.md).
 
 ## NATS contracts and authentication
 
@@ -133,9 +133,12 @@ labels directly, without an extra `data` wrapper: `SR-ATAD5`, `NR-AhR`, `SR-MMP`
 mode. Request payloads are still validated, but access tokens are ignored and a JWT key
 is not required for this mode. This is separate from Web user authentication. The code
 also has an authenticated path that verifies RS256 tokens with audience `mercurion-api`
-using the configured public key; the future auth/network policy remains an explicit
-design decision. There is currently no environment variable that switches the global flag.
-Do not interpret the presence of JWT code as proof that authentication is active.
+using the configured public key. Auth remains all-or-nothing and there is no environment
+variable that switches the global flag. When enabled, it requires a readable RSA public
+`.pem` file also in staging/production; no Base64 key input, hot reload or multi-key rotation
+is provided. Key failure stops startup, never enables public mode as a fallback. Adoption
+of coordinated rotation is deferred for the portfolio scope; Web's existing opt-in code
+is preserved. Do not interpret JWT code as proof that authentication is active.
 
 ## Local model training and evaluation
 
@@ -172,16 +175,26 @@ python -m unittest tests.test_rdkit_api
 python -m unittest tests.test_training_pipeline
 ```
 
+T21-02 adds explicit configuration and lifecycle/auth groups:
+
+```bash
+python -m unittest tests.test_config tests.test_runtime
+```
+
 The NATS handler tests replace broker, configuration and inference/model dependencies;
 they do not connect to a real NATS server or prove prediction with real weights. RDKit
 tests exercise the native chemistry library. Pipeline tests use synthetic data and replace
 Torch/training dependencies where appropriate; they do not perform full training. The
 groups still require their imported Python/native dependencies to be installed.
 
-The design inventory identified 18 handler methods, seven RDKit methods and four pipeline
-methods. This documentation change does not claim a new test run or a passing CI result.
-Loader/inference tests with real weights, lifecycle tests, coherent export verification
-and a dedicated application CI are scheduled in the roadmap.
+The original design inventory identified 18 handler methods, seven RDKit methods and four
+pipeline methods. T21-02 verified 54 focused application tests, including the 25 handler/
+RDKit cases, configuration, synthetic RSA signatures and fake-client lifecycle tests;
+[results and limits](docs/runtime-contract.md). A separate smoke check loaded the tracked
+weights and produced one CPU prediction without NATS/PubChem. The pipeline group was
+interrupted during a pandas native import and has no new result. Broader real-model
+regression, real NATS recovery, coherent export verification and dedicated application CI
+remain planned work.
 
 ## Containers and planned runtime boundary
 
