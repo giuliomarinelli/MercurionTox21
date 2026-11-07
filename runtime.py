@@ -1,10 +1,29 @@
 """Explicit startup boundaries; no file access or scientific imports at module import."""
 
 from functools import partial
+import json
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 from config import ConfigurationError
+
+
+def read_build_identity(path: str | Path = '/usr/share/mercurion/build-identity.json') -> dict | None:
+    """Image-owned metadata; absent in a normal source checkout, never guessed from env."""
+    path = Path(path)
+    if not path.exists():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding='utf-8'))
+        if (set(value) != {'version', 'revision', 'source'} or
+                not isinstance(value['version'], str) or not value['version'].strip() or
+                not re.fullmatch('[0-9a-f]{40}', value['revision']) or
+                value['source'] != 'https://github.com/giuliomarinelli/MercurionTox21'):
+            raise ValueError('Invalid identity')
+        return value
+    except (OSError, ValueError, TypeError, KeyError):
+        raise ConfigurationError('Invalid image build identity') from None
 
 
 def load_public_key(path: str, *, skip_auth: bool) -> str | None:

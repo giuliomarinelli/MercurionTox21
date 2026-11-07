@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Linux amd64 CPU. Supply --build-context model_package=<exported package directory>.
-FROM python:3.10.11-slim@sha256:fd86924ba14682eb11a3c244f60a35b5dfe3267cbf26d883fb5c14813ce926f1 AS runtime-dependencies
+FROM python:3.11.18-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS runtime-dependencies
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY requirements/build-linux-cpu.lock requirements/runtime-linux-cpu.lock ./
@@ -24,11 +24,11 @@ RUN /opt/venv/bin/python -m pip install --require-hashes --no-build-isolation -r
 COPY mercurion/calibration.py mercurion/export_model.py mercurion/train.py \
      mercurion/preprocessing.py mercurion/early_stopping.py mercurion/focal_loss.py ./mercurion/
 COPY tests ./tests
-COPY scripts/run_tests.py ./scripts/run_tests.py
+COPY scripts/run_tests.py scripts/container_evidence.py ./scripts/
 RUN /opt/venv/bin/python -B scripts/run_tests.py all && \
     /opt/venv/bin/python -c "from pathlib import Path; Path('/build/tests-passed').write_text('Self-contained unittest groups passed\n')"
 
-FROM python:3.10.11-slim@sha256:fd86924ba14682eb11a3c244f60a35b5dfe3267cbf26d883fb5c14813ce926f1 AS runtime
+FROM python:3.11.18-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS runtime
 ARG BUILD_VERSION
 ARG BUILD_REVISION
 LABEL org.opencontainers.image.source="https://github.com/giuliomarinelli/MercurionTox21" \
@@ -41,10 +41,11 @@ RUN python -c "import os,re; assert os.environ.get('BUILD_VERSION','').strip(), 
     useradd --uid 10021 --gid 10021 --no-create-home --shell /usr/sbin/nologin mercurion
 WORKDIR /app
 COPY --from=runtime-dependencies /opt/venv /opt/venv
+RUN python -c "import json,os,pathlib; p=pathlib.Path('/usr/share/mercurion'); p.mkdir(parents=True,exist_ok=True); (p/'build-identity.json').write_text(json.dumps({'version':os.environ['BUILD_VERSION'],'revision':os.environ['BUILD_REVISION'].lower(),'source':'https://github.com/giuliomarinelli/MercurionTox21'}))"
 COPY --from=runtime-source /app /app
 COPY --from=model_package /weights.pt /thresholds.json /manifest.json ./model/
-RUN rm -rf /opt/venv/lib/python3.10/site-packages/pip /opt/venv/lib/python3.10/site-packages/pip-*.dist-info /opt/venv/bin/pip* \
-           /usr/local/lib/python3.10/site-packages/pip /usr/local/lib/python3.10/site-packages/pip-*.dist-info /usr/local/bin/pip* && \
+RUN rm -rf /opt/venv/lib/python3.11/site-packages/pip /opt/venv/lib/python3.11/site-packages/pip-*.dist-info /opt/venv/bin/pip* \
+           /usr/local/lib/python3.11/site-packages/pip /usr/local/lib/python3.11/site-packages/pip-*.dist-info /usr/local/bin/pip* && \
     chmod 0555 /app/model && chmod 0444 /app/model/weights.pt /app/model/thresholds.json /app/model/manifest.json
 USER 10021:10021
 RUN python -c "from runtime import load_inference_runtime; m,d,p=load_inference_runtime(package_dir='/app/model'); r=p('CCO',m,d); assert len(r)==4 and all(0<=v['probability']<=1 for v in r.values())"

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "owner": "repository-owner",
+  "web_policy_source": "https://github.com/giuliomarinelli/MercurionWeb/blob/cbd7ccecf265ddda6dcefdf0325c2cc72cf159df/docs/supply-chain-policy.json",
+  "blocking_severities": ["CRITICAL"],
+  "exceptions": [],
+  "scanner": "aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
+}

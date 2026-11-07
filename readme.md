@@ -38,7 +38,7 @@ that the repository's default branch contains the same runtime or test inventory
 On Windows PowerShell:
 
 ```powershell
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
@@ -46,7 +46,7 @@ python -m pip install -r requirements.txt
 On Linux/macOS:
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
@@ -56,6 +56,11 @@ virtualenv. The commands above retain the legacy development/research requiremen
 T21-03 verified clean **Linux x86_64 / Python 3.10.11 / CPU** installs from separate
 [runtime and training/export hash locks](requirements/README.md). Use the documented
 profile procedure for that target; Windows/GPU compatibility is not implied by it.
+The current [security baseline](docs/security-baseline.md) moves the verified
+container target to Python 3.11.18/Debian 13 and Pillow 13.0.0 while preserving
+scientific-library versions. Legacy Python 3.10 virtualenvs are not upgraded by
+checkout; use a separate matching environment. Host Windows compatibility remains
+a separate check, not a consequence of these setup examples.
 The consolidated application targets use these Linux CPU profiles; see
 [container build and validation](docs/containers.md).
 
@@ -179,8 +184,8 @@ python -B scripts/run_tests.py application
 python -B scripts/run_tests.py all
 ```
 
-The default application group has 85 tests and needs only runtime dependencies. The
-self-contained `all` group has 99 and requires the training/export profile. The separate
+The current application group has 93 tests and needs only runtime dependencies. The
+self-contained `all` group has 107 and requires the training/export profile. The separate
 `reference` group checks a matching real package; it fails when that package is missing
 instead of silently skipping. Linux checks also pass in reverse order; no retraining on
 the real dataset or external services are part of these tests.
@@ -227,7 +232,7 @@ python -m unittest tests.test_model_package tests.test_model_export tests.test_c
 The root [Dockerfile](Dockerfile) has `test`, `staging` and `production` targets,
 with a positive [.dockerignore](.dockerignore) and explicit runtime copies.
 All run `python -m main` non-root and accept a separately exported model package
-as a named build context. The test target requires the 99 self-contained tests
+as a named build context. The test target requires the self-contained tests
 to pass in a separate build stage; no training, tests, datasets or historical
 outputs are copied into any final target. Staging/production configuration is
 external. [Build, validation and runtime instructions](docs/containers.md)
@@ -246,3 +251,7 @@ until integration:
 ## License
 
 See [LICENSE.md](LICENSE.md).
+
+T21-07 adds [candidate archives and security evidence](docs/delivery.md). Eligibility
+is enforced by the inherited critical-vulnerability gate; functional CI alone does
+not imply release approval. Coordinated delivery also requires the Web image records.

@@ -1,4 +1,4 @@
-# Direct runtime dependencies; preserve the existing versions.
+# Direct runtime dependencies; security baseline updates are explicit.
 numpy==1.24.4
 torch==2.13.0
 rdkit==2024.3.5
@@ -9,3 +9,6 @@ pydantic==2.10.6
 PyJWT==2.15.1
 cryptography==50.0.0
 typing_extensions==4.16.0
+
+# Explicit security pin for the RDKit image dependency.
+pillow==13.0.0

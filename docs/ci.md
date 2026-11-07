@@ -5,7 +5,7 @@ release/hotfix/bugfix pushes, PRs targeting develop/master and manual dispatch.
 It never publishes images, deploys, merges branches or needs personal secrets.
 Only read access to repository contents is granted; actions are pinned by SHA.
 
-The Linux amd64 CPU verification job uses the pinned Python 3.10.11 Docker
+The Linux amd64 CPU verification job uses the pinned Python 3.11.18 Docker
 base and hash-locked profiles. A fresh hosted runner performs clean dependency
 installation (no persistent dependency or image cache). Steps fail on nonzero
 exit; piped commands retain `pipefail`. The stable **Required gate** runs even
@@ -15,8 +15,8 @@ This publishes a check; configuring branch protection remains an operator choice
 Evidence is separated into:
 
 1. AST parsing of tracked Python files without import side effects.
-2. Validation image build, locked install, `pip check`, and 99 self-contained tests.
-3. Explicit offline unittest groups: application 85, model/export 9, training 5.
+2. Validation image build, locked install, `pip check`, and 107 self-contained tests.
+3. Explicit offline unittest groups: application 93, model/export 9, training 5.
    These overlap the build suite and are not 198 distinct cases. JSON reports
    contain counts, status and failing test diagnostics, alongside text logs.
 4. QA package export using the selected tracked checkpoint plus **only**
@@ -58,3 +58,5 @@ Container inputs/build arguments are documented in [containers.md](containers.md
 Use an external report directory locally; CI's `artifacts/` is runner-local.
 TLS/JWT-active tests, provider success, scientific quality and integrated Web
 acceptance remain separate work. T21-06 next aligns the old Web deployment refs.
+
+T21-07 adds a final archive/SBOM/security gate: [contract and current block](delivery.md).
