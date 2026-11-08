@@ -1,5 +1,9 @@
 # T21-09 — Application regression suite
 
+**8 November file-bootstrap update:** the application group has **122 tests**,
+all passed on Linux; Windows passes 120 with two POSIX checks skipped. See the
+[credential-file parser, filesystem and launcher coverage](secret-file-bootstrap.md).
+
 **8 November broker-auth update:** the application group now passes **107 tests**
 on Windows and Linux. [NATS credential validation and isolated broker smoke](nats-client-auth.md)
 extend configuration/lifecycle coverage; historical counts below describe the

@@ -10,11 +10,12 @@ import tempfile
 sys.path.insert(0, '/app')
 import main as application
 from config import get_config, nats_subject
+from secret_bootstrap import BOOTSTRAP_FILE_VARIABLE, load_secret_file_environment
 from nats.aio.client import Client
 from nats.errors import AuthorizationError, Error
 
 phase = 'readiness'
-counts = {'authenticated_rpcs': 0, 'legacy_rpcs': 0, 'worker_auth_denials': 0}
+counts = {'authenticated_rpcs': 0, 'legacy_rpcs': 0, 'worker_auth_denials': 0, 'file_bootstraps': 0}
 
 
 async def ignore_error(_error):
@@ -47,9 +48,17 @@ async def main():
     application.NATS = worker_client
     with tempfile.TemporaryDirectory(prefix='tox21-auth-probe-') as root:
         def configure(environment, auth):
-            settings = get_config({'PY_ENV': 'test' if environment == 'legacy' else environment,
-                                  'NATS_URL': f'nats://nats-{environment}:4222', 'VERSION': 'synthetic', **auth},
-                                 root=Path(root))
+            values = {'PY_ENV': 'test' if environment == 'legacy' else environment,
+                      'NATS_URL': f'nats://nats-{environment}:4222', 'VERSION': 'synthetic'}
+            if auth:
+                path = Path(root) / f'{environment}-credentials.json'
+                path.write_text(json.dumps({'schemaVersion': 1, 'environment': environment, 'variables': auth}), encoding='utf-8')
+                path.chmod(0o600)
+                values[BOOTSTRAP_FILE_VARIABLE] = str(path)
+                load_secret_file_environment(values)
+                counts['file_bootstraps'] += 1
+                assert path.exists(), 'consumer-deleted-active-file'
+            settings = get_config(values, root=Path(root))
             application.get_config = lambda: settings
             return settings
 

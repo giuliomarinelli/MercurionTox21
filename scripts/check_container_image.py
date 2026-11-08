@@ -15,7 +15,7 @@ for name in ['pandas','sklearn','matplotlib','mercurion.train','mercurion.calibr
              'mercurion.export_model','mercurion.preprocessing','mercurion.early_stopping',
              'mercurion.focal_loss','tests','pip']:
     assert importlib.util.find_spec(name) is None,name
-expected={'main.py','config.py','runtime.py','api','schemas','mercurion','model'}
+expected={'main.py','config.py','runtime.py','secret_bootstrap.py','bootstrap_secrets.py','api','schemas','mercurion','model'}
 assert {p.name for p in pathlib.Path('/app').iterdir()}==expected
 assert {p.name for p in pathlib.Path('/app/model').iterdir()}=={'weights.pt','thresholds.json','manifest.json'}
 assert not os.access('/app/model/weights.pt',os.W_OK)

@@ -127,6 +127,11 @@ supplied by the clone. See the [T21-02 runtime contract](docs/runtime-contract.m
 
 ## NATS contracts and authentication
 
+The [opt-in credential-file launcher](docs/secret-file-bootstrap.md) supports
+manual secret delivery inside the process; the normal Docker CMD is unchanged.
+Infrastructure work continues on `feature/infra-vm-nats-client-auth` as the
+operational branch; integration into `develop` remains with the owner.
+
 [Broker user/password authentication](docs/nats-client-auth.md) is separate from
 service JWT validation. Existing URLs with userinfo must migrate to the two
 dedicated variables; the password is masked in the configuration model.

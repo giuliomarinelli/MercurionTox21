@@ -5,6 +5,10 @@ and `production` (default). All start `python -m main` as UID/GID `10021:10021`.
 `PY_ENV` selects the corresponding NATS namespace and configuration policy;
 runtime credentials and broker addresses are not build inputs.
 
+An [opt-in credential-file launcher](secret-file-bootstrap.md) is included as
+`python -m bootstrap_secrets`. Default CMD and all existing target behavior are
+preserved; the alternative is selected explicitly by a future runtime manifest.
+
 ## Build
 
 Use a clean source checkout and a separately exported, validated

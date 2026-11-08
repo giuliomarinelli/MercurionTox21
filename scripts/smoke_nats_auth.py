@@ -51,7 +51,8 @@ def main():
                        '--mount', f'type=bind,src={path},dst=/qa.conf,readonly', NATS_IMAGE, '--config', '/qa.conf')
             mounts = ['--mount', f'type=bind,src={ROOT / "scripts/fixtures/nats_broker_auth.py"},dst=/qa/probe.py,readonly']
             if args.source_overlay:
-                for source in ('main.py', 'config.py', 'runtime.py', 'api', 'schemas', 'mercurion'):
+                for source in ('main.py', 'config.py', 'runtime.py', 'secret_bootstrap.py', 'bootstrap_secrets.py',
+                               'api', 'schemas', 'mercurion'):
                     mounts.extend(['--mount', f'type=bind,src={ROOT / source},dst=/app/{source},readonly'])
             result = subprocess.run(['docker', '--context', args.docker_context, 'run', '--pull', 'never',
                                      '--name', f'{name}-probe', '--label', f'{LABEL}={run_id}', '--network', name,

@@ -75,5 +75,9 @@ The workflow adds the same smoke against its newly built production image,
 without an overlay; remote CI remains a separate exact-SHA result.
 
 Broker users/configuration, secret delivery and VM acceptance remain pending.
+An [opt-in file bootstrap adapter](secret-file-bootstrap.md) now supplies the
+credential pair to the process; transport/provisioning remain separate. Work
+continues on the same operational branch. The application group is now 122
+tests (two POSIX skips on Windows); counts above describe the original delivery.
 Do not enable operational broker auth before both consumer changes are integrated
 and matching per-consumer/environment credentials are provisioned.

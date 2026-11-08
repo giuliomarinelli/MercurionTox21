@@ -1,5 +1,10 @@
 # T21-05 — Application CI
 
+The [file-bootstrap update](secret-file-bootstrap.md) adds its unit/CLI checks
+to the application group (122 cases; POSIX checks run on Linux), updates the
+runtime file inventory and supplies synthetic credentials from files in the
+existing broker smoke. It preserves default CMD and dependency locks.
+
 **8 November update:** [broker user/password smoke](nats-client-auth.md) is added
 after mixed JWT service-auth checks, against the freshly built production image.
 It verifies 10 authenticated RPCs, 5 legacy RPCs and 8 explicit auth denials, with

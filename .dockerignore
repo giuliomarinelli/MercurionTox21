@@ -5,6 +5,8 @@
 !main.py
 !config.py
 !runtime.py
+!secret_bootstrap.py
+!bootstrap_secrets.py
 !requirements/
 !requirements/*-linux-cpu.lock
 !api/

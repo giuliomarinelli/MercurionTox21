@@ -11,7 +11,7 @@ RUN python -m venv /opt/venv && \
 
 FROM runtime-dependencies AS runtime-source
 WORKDIR /app
-COPY main.py config.py runtime.py ./
+COPY main.py config.py runtime.py secret_bootstrap.py bootstrap_secrets.py ./
 COPY api/__init__.py api/inference.py api/rdkit.py api/pcp.py ./api/
 COPY schemas/__init__.py schemas/schemas.py ./schemas/
 COPY mercurion/__init__.py mercurion/model.py mercurion/model_spec.py mercurion/labels.py \
