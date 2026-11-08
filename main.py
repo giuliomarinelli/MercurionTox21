@@ -115,7 +115,7 @@ async def run(
 
     try:
         await nc.connect(
-            config.nats_url, disconnected_cb=disconnected,
+            config.nats_url, **config.nats_connect_credentials(), disconnected_cb=disconnected,
             reconnected_cb=reconnected, closed_cb=closed,
         )
         # =========================

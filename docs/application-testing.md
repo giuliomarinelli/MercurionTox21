@@ -1,5 +1,10 @@
 # T21-09 — Application regression suite
 
+**8 November broker-auth update:** the application group now passes **107 tests**
+on Windows and Linux. [NATS credential validation and isolated broker smoke](nats-client-auth.md)
+extend configuration/lifecycle coverage; historical counts below describe the
+original deliveries and must not be added to the current group.
+
 T21-10 extends the training group: see the [training correctness contract and
 current evidence](training-contract.md). The counts below describe the original
 T21-09 delivery; current groups contain 21 training / 123 total tests.

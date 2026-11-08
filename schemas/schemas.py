@@ -2,7 +2,7 @@ from typing_extensions import Annotated, Self
 from typing import Literal
 from urllib.parse import urlsplit
 from pydantic import (
-    BaseModel, StringConstraints, ConfigDict, Field,
+    BaseModel, StringConstraints, ConfigDict, Field, SecretStr,
     ValidationInfo, field_validator, model_validator,
 )
 
@@ -74,8 +74,11 @@ AuthPolicy = Literal['allow', 'require-jwt', 'disabled']
 
 
 class Configuration(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
     py_env: Literal["development", "test", "staging", "production"]
     nats_url: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
+    nats_username: Annotated[str, StringConstraints(strict=True, min_length=1)] | None = None
+    nats_password: Annotated[SecretStr, Field(strict=True, min_length=1)] | None = None
     version: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     jwt_public_key_path: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
     model_package_dir: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)] | None = None
@@ -84,6 +87,26 @@ class Configuration(BaseModel):
     auth_rdkit_canonical_smiles: AuthPolicy = 'disabled'
     auth_rdkit_same_structure: AuthPolicy = 'disabled'
     auth_pubchem_iupac_name: AuthPolicy = 'disabled'
+
+    @field_validator("nats_username", "nats_password", mode="before")
+    @classmethod
+    def reject_explicit_null_credentials(cls, value):
+        if value is None:
+            raise ValueError("Omit both NATS credential fields or supply non-empty strings")
+        return value
+
+    @model_validator(mode="after")
+    def require_complete_nats_credentials(self) -> Self:
+        if (self.nats_username is None) != (self.nats_password is None):
+            raise ValueError("NATS_USERNAME and NATS_PASSWORD must be declared together")
+        return self
+
+    def nats_connect_credentials(self) -> dict[str, str]:
+        if self.nats_username is None and self.nats_password is None:
+            return {}
+        if self.nats_username is None or self.nats_password is None:
+            raise ValueError("NATS credentials must be a complete pair")
+        return {"user": self.nats_username, "password": self.nats_password.get_secret_value()}
 
     def resolved_skip_auth(self, global_skip_auth: bool) -> dict[str, bool]:
         """Resolve once at bootstrap; disabled means inherit, never disable RPC."""
@@ -102,6 +125,7 @@ class Configuration(BaseModel):
     def validate_nats_url(cls, value: str) -> str:
         parsed = urlsplit(value)
         if (parsed.scheme not in ("nats", "tls") or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
                 or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
             raise ValueError("Expected a NATS broker URL")
         if parsed.port is not None and parsed.port == 0:

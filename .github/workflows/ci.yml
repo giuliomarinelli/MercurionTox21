@@ -89,6 +89,11 @@ jobs:
           done
       - name: Mixed service authentication over real NATS with synthetic PEM
         run: python3 -B scripts/smoke_auth.py tox21-production --report-dir artifacts/auth
+      - name: Broker user/password authentication and legacy compatibility
+        run: |
+          set -euo pipefail
+          python3 -B scripts/smoke_nats_auth.py tox21-production --docker-context default \
+            --report artifacts/nats-auth.json 2>&1 | tee artifacts/nats-auth.log
       - name: Export and load candidate, generate SBOM and enforce critical vulnerability policy
         run: |
           python3 -B scripts/container_evidence.py --image tox21-production \

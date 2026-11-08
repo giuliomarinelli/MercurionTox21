@@ -1,5 +1,12 @@
 # T21-05 — Application CI
 
+**8 November update:** [broker user/password smoke](nats-client-auth.md) is added
+after mixed JWT service-auth checks, against the freshly built production image.
+It verifies 10 authenticated RPCs, 5 legacy RPCs and 8 explicit auth denials, with
+synthetic inference/PubChem and no real credentials. Local application coverage
+is now 107 tests; counts below retain historical T21-05 evidence. The updated
+workflow itself still requires an exact-SHA remote run.
+
 The [Tox21 CI workflow](../.github/workflows/ci.yml) runs on development/feature/
 release/hotfix/bugfix pushes, PRs targeting develop/master and manual dispatch.
 It never publishes images, deploys, merges branches or needs personal secrets.
