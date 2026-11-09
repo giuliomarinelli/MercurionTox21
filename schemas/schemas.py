@@ -1,5 +1,5 @@
 from typing_extensions import Annotated, Self
-from typing import Literal
+from typing import Literal, TypedDict
 from urllib.parse import urlsplit
 from pydantic import (
     BaseModel, StringConstraints, ConfigDict, Field, SecretStr,
@@ -73,6 +73,12 @@ class SameStructureRequest(RdkitRequest):
 AuthPolicy = Literal['allow', 'require-jwt', 'disabled']
 
 
+class NatsConnectCredentials(TypedDict, total=False):
+    """Only the optional credential keywords accepted by nats-py Client.connect."""
+    user: str
+    password: str
+
+
 class Configuration(BaseModel):
     model_config = ConfigDict(hide_input_in_errors=True)
     py_env: Literal["development", "test", "staging", "production"]
@@ -101,7 +107,7 @@ class Configuration(BaseModel):
             raise ValueError("NATS_USERNAME and NATS_PASSWORD must be declared together")
         return self
 
-    def nats_connect_credentials(self) -> dict[str, str]:
+    def nats_connect_credentials(self) -> NatsConnectCredentials:
         if self.nats_username is None and self.nats_password is None:
             return {}
         if self.nats_username is None or self.nats_password is None:

@@ -81,3 +81,20 @@ continues on the same operational branch. The application group is now 122
 tests (two POSIX skips on Windows); counts above describe the original delivery.
 Do not enable operational broker auth before both consumer changes are integrated
 and matching per-consumer/environment credentials are provisioned.
+
+## Credential keyword typing — 9 November 2026
+
+`nats_connect_credentials()` returns a `NatsConnectCredentials` TypedDict with
+optional `user` and `password` keys. Runtime pair validation is unchanged.
+A generic `dict[str, str]` loses the key names when unpacked into `connect`:
+Pyright then considers strings for unrelated numeric, boolean and callback
+parameters. The fix preserves the explicit keyword contract instead of hiding
+the diagnostics with `type: ignore`; see the
+[Python typing specification](https://typing.python.org/en/latest/spec/callables.html#unpack-for-keyword-arguments).
+
+Reproduced with cached Pyright 1.1.414 and the local Pylance typeshed, using the
+existing virtual environment: isolated actual-client/configuration call,
+20 errors before and zero after; `main.py` and `schemas/schemas.py` also checked
+with zero diagnostics. Application suite on Windows: 120 passed, two POSIX
+skips. This is focused local evidence, not a repository-wide type-check gate
+or a new remote CI result; no checker dependency or suppression added.
