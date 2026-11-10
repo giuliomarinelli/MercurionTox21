@@ -1,5 +1,8 @@
 # Security baseline — 7 November 2026
 
+Historical critical-only evidence. From 10 November the owner's [strict policy](strict-vulnerability-policy.md)
+blocks every severity; the results below are not eligibility under policy v2.
+
 Focused follow-up to the T21-07 critical-vulnerability block. The branch
 `feature/T21-BASELINE` starts from preserved `feature/T21-07`, so it also contains
 the image identity, archive evidence and fail-closed security gate. No merge is

@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 GROUPS = {
-    "application": ["tests.test_secret_bootstrap", "tests.test_service_auth", "tests.test_container_evidence", "tests.test_build_identity", "tests.test_config", "tests.test_runtime", "tests.test_nats_requests",
+    "application": ["tests.test_secret_bootstrap", "tests.test_service_auth", "tests.test_container_evidence", "tests.test_source_security", "tests.test_build_identity", "tests.test_config", "tests.test_runtime", "tests.test_nats_requests",
                     "tests.test_rdkit_api", "tests.test_pcp", "tests.test_inference", "tests.test_model_package"],
     "model": ["tests.test_model_export"],
     "training": ["tests.test_training_pipeline", "tests.test_training_contracts", "tests.test_checkpoint_training"],

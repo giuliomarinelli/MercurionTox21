@@ -24,6 +24,7 @@
 !scripts/
 !scripts/run_tests.py
 !scripts/container_evidence.py
+!scripts/check_source_security.py
 **/__pycache__/**
 **/*.pyc
 **/.env*

@@ -24,7 +24,7 @@ RUN /opt/venv/bin/python -m pip install --require-hashes --no-build-isolation -r
 COPY mercurion/calibration.py mercurion/export_model.py mercurion/train.py \
      mercurion/preprocessing.py mercurion/early_stopping.py mercurion/focal_loss.py ./mercurion/
 COPY tests ./tests
-COPY scripts/run_tests.py scripts/container_evidence.py ./scripts/
+COPY scripts/run_tests.py scripts/container_evidence.py scripts/check_source_security.py ./scripts/
 RUN /opt/venv/bin/python -B scripts/run_tests.py all && \
     /opt/venv/bin/python -c "from pathlib import Path; Path('/build/tests-passed').write_text('Self-contained unittest groups passed\n')"
 

@@ -21,7 +21,7 @@ it does not upload images. [Trivy archives](https://trivy.dev/docs/latest/target
 [SBOM documentation](https://trivy.dev/docs/latest/supply-chain/sbom/).
 
 The report must match the archive's image config digest. The
-[policy](container-policy.json) inherits Web's critical-severity block, with no
+[policy](container-policy.json) v2 implements the owner's strict zero-vulnerability rule, with no
 exceptions or ignored/unfixed findings. All severity counts and OS status remain
 visible. Missing/malformed scans fail closed. This gate does not certify license
 compliance or complete native-library coverage; the SBOM supports further review.
@@ -38,13 +38,17 @@ a config digest; neither is called a verified registry digest. Loading into the
 current daemon proves archive acceptance/identity, not a cold restore on a new
 machine. It starts no services. [Docker save](https://docs.docker.com/reference/cli/docker/image/save/).
 
-Exit 0 means the implemented critical-vulnerability gate passed. Exit **2** means
+Exit 0 means the implemented zero-vulnerability gate passed. Exit **2** means
 export/evidence is valid but **security eligibility is denied**. Tool, scanner or
 integrity failures also exit nonzero. Diagnostics are retained; no failure is
-translated into approval. CI runs this after functional tests; a critical finding
+translated into approval. CI runs this after functional tests; any vulnerability finding
 makes verification and Required gate red. Only JSON/log diagnostics are uploaded,
 **not image archives**. A later coordinated manifest must include real records
 for both Web images; missing components are explicit, never substituted by Tox21.
+
+The [strict policy](strict-vulnerability-policy.md) also scans legacy, runtime,
+training and build manifests before builds. Historical results below used the
+previous critical-only threshold and do not approve a candidate under v2.
 
 ## Historical block — 6 November 2026
 

@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from scripts.container_evidence import archive_config, security_summary
 
-POLICY = {'schema_version': 1, 'blocking_severities': ['CRITICAL'], 'exceptions': []}
+POLICY = {'schema_version': 2, 'blocking_severities': ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+          'dependency_scopes': ['legacy', 'runtime', 'training', 'build'], 'exceptions': []}
 DIGEST = 'sha256:' + 'a' * 64
 
 
@@ -15,10 +16,19 @@ class ContainerEvidenceTests(unittest.TestCase):
     def test_critical_findings_block_without_hiding_other_severities(self):
         findings = [{'Severity': severity, 'VulnerabilityID': 'CVE-fixture', 'PkgName': 'fixture'}
                     for severity in ['CRITICAL', 'HIGH']]
-        report = {'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': [{'Vulnerabilities': findings}]}
+        report = {'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': [{'Target': 'fixture', 'Vulnerabilities': findings}]}
         result = security_summary(report, DIGEST, POLICY)
         self.assertFalse(result['eligible'])
         self.assertEqual(result['counts'], {'CRITICAL': 1, 'HIGH': 1})
+        self.assertEqual(result['blocking'], findings)
+
+    def test_each_severity_blocks_even_without_a_cve_identifier(self):
+        for severity in POLICY['blocking_severities']:
+            report = {'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': [
+                {'Target': 'fixture', 'Vulnerabilities': [{'Severity': severity,
+                 'VulnerabilityID': 'GHSA-fixture', 'PkgName': 'fixture'}]}]}
+            with self.subTest(severity=severity):
+                self.assertFalse(security_summary(report, DIGEST, POLICY)['eligible'])
 
     def test_empty_valid_scan_is_eligible(self):
         report = {'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': [{'Target': 'fixture'}]}
@@ -28,9 +38,17 @@ class ContainerEvidenceTests(unittest.TestCase):
         report = {'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': [{'Target': 'fixture'}]}
         for altered, policy in [({}, POLICY), ({**report, 'Metadata': {}}, POLICY),
                                 (report, {**POLICY, 'blocking_severities': []}),
+                                (report, {**POLICY, 'blocking_severities': ['CRITICAL']}),
                                 (report, {**POLICY, 'exceptions': ['unapproved']})]:
             with self.assertRaises(ValueError):
                 security_summary(altered, DIGEST, policy)
+
+    def test_missing_target_unknown_severity_and_partial_scans_fail_closed(self):
+        for results in ([], [{}], [{'Target': 'fixture', 'Vulnerabilities': None}],
+                        [{'Target': 'fixture', 'Vulnerabilities': [{'Severity': 'NEW',
+                          'VulnerabilityID': 'CVE-fixture', 'PkgName': 'fixture'}]}]):
+            with self.assertRaises(ValueError):
+                security_summary({'SchemaVersion': 2, 'Metadata': {'ImageID': DIGEST}, 'Results': results}, DIGEST, POLICY)
 
     def test_archive_config_is_hashed_without_extraction(self):
         self.check_archive([])

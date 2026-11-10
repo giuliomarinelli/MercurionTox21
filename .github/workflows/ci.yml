@@ -38,6 +38,22 @@ jobs:
               ast.parse(pathlib.Path(name).read_text(encoding='utf-8-sig'), filename=name)
           print(f'Parsed {len(paths)} tracked Python files without import side effects')
           PY
+      - name: Strict vulnerability policy tests and source manifest preparation
+        run: |
+          python3 -B -m unittest tests.test_container_evidence tests.test_source_security
+          python3 -B -m scripts.check_source_security --prepare artifacts/dependency-input
+      - name: Scan runtime, training, build and legacy dependencies without severity exclusions
+        run: |
+          set -euo pipefail
+          scanner=$(python3 -c "import json; print(json.load(open('docs/container-policy.json'))['scanner'])")
+          mkdir -p "$RUNNER_TEMP/tox21-trivy-cache"
+          docker run --rm --mount "type=bind,src=$PWD/artifacts/dependency-input,dst=/source,readonly" \
+            --mount "type=bind,src=$PWD/artifacts,dst=/reports" \
+            --mount "type=bind,src=$RUNNER_TEMP/tox21-trivy-cache,dst=/cache" \
+            "$scanner" fs --scanners vuln --include-dev-deps --ignorefile /dev/null --format json --cache-dir /cache \
+            --output /reports/dependency-vulnerabilities.json /source
+          python3 -B -m scripts.check_source_security --report artifacts/dependency-vulnerabilities.json \
+            --output artifacts/dependency-policy.json
       - name: Clean locked install and self-contained build gate
         run: |
           set -euo pipefail
@@ -94,7 +110,7 @@ jobs:
           set -euo pipefail
           python3 -B scripts/smoke_nats_auth.py tox21-production --docker-context default \
             --report artifacts/nats-auth.json 2>&1 | tee artifacts/nats-auth.log
-      - name: Export and load candidate, generate SBOM and enforce critical vulnerability policy
+      - name: Export and load candidate, generate SBOM and enforce zero vulnerability policy
         run: |
           python3 -B scripts/container_evidence.py --image tox21-production \
             --output artifacts/container --cache "$RUNNER_TEMP/tox21-trivy-cache"

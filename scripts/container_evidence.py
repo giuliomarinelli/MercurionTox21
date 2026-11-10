@@ -30,21 +30,33 @@ def archive_config(path):
         return 'sha256:' + hashlib.sha256(raw).hexdigest(), json.loads(raw)
 
 
-def security_summary(report, config_digest, policy):
-    if (policy.get('schema_version') != 1 or policy.get('blocking_severities') != ['CRITICAL'] or
+def evaluate_security_report(report, policy):
+    if (policy.get('schema_version') != 2 or
+            policy.get('blocking_severities') != ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] or
+            policy.get('dependency_scopes') != ['legacy', 'runtime', 'training', 'build'] or
             policy.get('exceptions') != []):
         raise ValueError('Unsupported policy or unauthorized exception')
-    if (report.get('SchemaVersion') != 2 or report.get('Metadata', {}).get('ImageID') != config_digest or
+    if (report.get('SchemaVersion') != 2 or report.get('Error') or report.get('Errors') or
             not isinstance(report.get('Results'), list) or not report['Results']):
-        raise ValueError('Missing, malformed or mismatched security scan')
+        raise ValueError('Missing or malformed security scan')
+    if any(not isinstance(result, dict) or not isinstance(result.get('Target'), str) or not result['Target']
+           or not isinstance(result.get('Vulnerabilities', []), list) for result in report['Results']):
+        raise ValueError('Malformed security scan target')
     findings = [finding for result in report['Results'] for finding in result.get('Vulnerabilities', [])]
-    if any(finding.get('Severity') not in ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] or
-           not finding.get('VulnerabilityID') or not finding.get('PkgName') for finding in findings):
+    if any(not isinstance(finding, dict) or finding.get('Severity') not in policy['blocking_severities'] or
+           not isinstance(finding.get('VulnerabilityID'), str) or not finding['VulnerabilityID'] or
+           not isinstance(finding.get('PkgName'), str) or not finding['PkgName'] for finding in findings):
         raise ValueError('Malformed vulnerability finding')
     counts = Counter(finding.get('Severity', 'UNKNOWN') for finding in findings)
-    return {'eligible': counts['CRITICAL'] == 0, 'counts': dict(counts),
-            'blocking': [finding for finding in findings if finding.get('Severity') == 'CRITICAL'],
+    return {'eligible': not findings, 'counts': dict(counts),
+            'blocking': findings,
             'os': report.get('Metadata', {}).get('OS')}
+
+
+def security_summary(report, config_digest, policy):
+    if report.get('Metadata', {}).get('ImageID') != config_digest:
+        raise ValueError('Mismatched security scan')
+    return evaluate_security_report(report, policy)
 
 
 def run(*args):
@@ -74,7 +86,7 @@ def export(args):
     args.cache.mkdir(parents=True, exist_ok=True)
     scanner = policy['scanner']
     for filename, flags in [('sbom.cdx.json', ['--format', 'cyclonedx']),
-                            ('vulnerabilities.json', ['--scanners', 'vuln', '--format', 'json'])]:
+                            ('vulnerabilities.json', ['--scanners', 'vuln', '--ignorefile', '/dev/null', '--format', 'json'])]:
         result = subprocess.run(['docker', 'run', '--rm', *mounts, scanner, 'image', '--quiet',
                                  '--input', '/evidence/image.tar', '--cache-dir', '/cache',
                                  '--output', '/evidence/' + filename, *flags],

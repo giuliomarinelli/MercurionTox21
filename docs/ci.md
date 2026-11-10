@@ -1,5 +1,12 @@
 # T21-05 — Application CI
 
+**10 November policy update:** [strict zero-vulnerability enforcement](strict-vulnerability-policy.md)
+now runs stdlib policy tests and a complete legacy/runtime/training/build source
+scan before builds. Any severity, incomplete scan or scanner error fails the
+verification job and Required gate. The image exporter uses the same rule.
+Historical successes described below retain their original threshold; current
+known findings must be fixed before CI can pass under policy v2.
+
 The [file-bootstrap update](secret-file-bootstrap.md) adds its unit/CLI checks
 to the application group (122 cases; POSIX checks run on Linux), updates the
 runtime file inventory and supplies synthetic credentials from files in the
