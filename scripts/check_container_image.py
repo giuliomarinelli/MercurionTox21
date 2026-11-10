@@ -5,7 +5,10 @@ import subprocess
 
 
 AUDIT = r'''
-import importlib.util,json,os,pathlib,shutil
+import importlib.util,json,os,pathlib,shutil,sys
+assert sys.version_info[:3] == (3,11,18)
+assert 'ID=wolfi' in pathlib.Path('/etc/os-release').read_text().splitlines()
+assert pathlib.Path('/lib/apk/db/installed').stat().st_size > 0
 assert (os.getuid(),os.getgid()) == (10021,10021)
 assert os.statvfs('/app').f_flag & os.ST_RDONLY
 assert os.environ['MODEL_PACKAGE_DIR']=='/app/model'
@@ -26,7 +29,8 @@ a=predict('CCO',model,device); b=predict('CCO',model,device)
 assert a==b and set(a)=={'SR-ATAD5','NR-AhR','SR-MMP','SR-p53'}
 assert all(0<=item['probability']<=1 for item in a.values())
 print(json.dumps({'uid':os.getuid(),'gid':os.getgid(),'device':device,'environment':os.environ['PY_ENV'],
-                  'readonly':True,'training_absent':True,'repeatable_inference':True,'build':read_build_identity()}))
+                  'readonly':True,'training_absent':True,'repeatable_inference':True,
+                  'base_os':'wolfi','python':sys.version.split()[0],'build':read_build_identity()}))
 '''
 
 

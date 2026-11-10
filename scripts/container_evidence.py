@@ -56,6 +56,11 @@ def evaluate_security_report(report, policy):
 def security_summary(report, config_digest, policy):
     if report.get('Metadata', {}).get('ImageID') != config_digest:
         raise ValueError('Mismatched security scan')
+    if report.get('Metadata', {}).get('OS', {}).get('Family') != 'wolfi':
+        raise ValueError('Runtime OS not recognized as Wolfi')
+    if not any(result.get('Class') == 'os-pkgs' and result.get('Type') == 'wolfi'
+               for result in report.get('Results', []) if isinstance(result, dict)):
+        raise ValueError('Missing Wolfi OS package scan')
     return evaluate_security_report(report, policy)
 
 
