@@ -65,7 +65,7 @@ The [7 November baseline revision](security-baseline.md) replaces those OS/Pytho
 Pillow pins. Eligibility is established by the gate on the exact resulting image,
 not by treating this historical report as the current scan or removing its findings.
 
-The expanded suite has **107 self-contained cases**, **93 application cases**,
-model/export 9 and synthetic training 5. The reference group stays separate.
+The expanded suite has **159 self-contained cases** after bootstrap/auth and
+strict image-scan coverage. The reference group stays separate.
 Coordinated delivery requires a passing security gate and actual Web image records.
 Transport QA alone does not close T21-07 or prove deployment acceptance.

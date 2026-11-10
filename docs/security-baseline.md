@@ -2,6 +2,9 @@
 
 Historical critical-only evidence. From 10 November the owner's [strict policy](strict-vulnerability-policy.md)
 blocks every severity; the results below are not eligibility under policy v2.
+The later Wolfi/glibc migration keeps Python 3.11.18 and the model unchanged;
+its exact-SHA CI and full OS/Python scan pass with zero findings. See the
+completion section of that strict-policy document for current evidence.
 
 Focused follow-up to the T21-07 critical-vulnerability block. The branch
 `feature/T21-BASELINE` starts from preserved `feature/T21-07`, so it also contains
