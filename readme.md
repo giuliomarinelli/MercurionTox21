@@ -112,7 +112,8 @@ Configuration is defined by [config.py](config.py) and `Configuration` in
 | Setting | Current behavior |
 | --- | --- |
 | `PY_ENV` | Exact lowercase `development`, `test`, `staging`, `production`; default `development`; other/blank values fail |
-| `NATS_URL` | Required nonblank `nats://` or `tls://` broker URL |
+| `NATS_URL` | Required nonblank `nats://` or `tls://` broker URL, without embedded credentials |
+| `NATS_USERNAME`, `NATS_PASSWORD` | Optional pair; omit both for legacy unauthenticated NATS. Incomplete/empty/non-string values fail validation |
 | `VERSION` | Required nonblank string |
 | `JWT_PUBLIC_KEY_PATH` | Optional override; otherwise `public.<PY_ENV>.pem`, or `public.pem` for production |
 | `MODEL_PACKAGE_DIR` | Optional directory containing `weights.pt`, `thresholds.json`, `manifest.json`; validated before startup. Unset retains explicit legacy compatibility |
@@ -125,6 +126,15 @@ deployment definitions still require alignment. No personal configuration or key
 supplied by the clone. See the [T21-02 runtime contract](docs/runtime-contract.md).
 
 ## NATS contracts and authentication
+
+The [opt-in credential-file launcher](docs/secret-file-bootstrap.md) supports
+manual secret delivery inside the process; the normal Docker CMD is unchanged.
+Infrastructure work continues on `feature/infra-vm-nats-client-auth` as the
+operational branch; integration into `develop` remains with the owner.
+
+[Broker user/password authentication](docs/nats-client-auth.md) is separate from
+service JWT validation. Existing URLs with userinfo must migrate to the two
+dedicated variables; the password is masked in the configuration model.
 
 | Base subject | Operation / success response |
 | --- | --- |

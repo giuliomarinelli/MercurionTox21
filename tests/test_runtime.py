@@ -143,6 +143,37 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.client.close.assert_awaited_once()
         self.assertFalse(self.ready.is_set())
 
+    async def test_connect_uses_separate_credentials_without_changing_the_url(self):
+        self.settings = Configuration(py_env="test", nats_url="nats://test.invalid:4222",
+                                      version="synthetic", jwt_public_key_path="not-used.pem",
+                                      nats_username="synthetic-worker", nats_password="synthetic-@$:password")
+        with patch.object(application, "get_config", return_value=self.settings):
+            task = await self.start()
+            self.assertEqual(self.client.connect.await_args.args, ("nats://test.invalid:4222",))
+            options = self.client.connect.await_args.kwargs
+            self.assertEqual(options["user"], "synthetic-worker")
+            self.assertEqual(options["password"], "synthetic-@$:password")
+            self.stop.set()
+            await task
+
+    async def test_legacy_connect_omits_auth_options_and_auth_failure_is_not_retried_anonymously(self):
+        task = await self.start()
+        self.assertNotIn("user", self.client.connect.await_args.kwargs)
+        self.assertNotIn("password", self.client.connect.await_args.kwargs)
+        self.stop.set()
+        await task
+        self.client.connect.reset_mock()
+        self.settings = Configuration(py_env="test", nats_url="nats://test.invalid:4222",
+                                      version="synthetic", jwt_public_key_path="not-used.pem",
+                                      nats_username="synthetic-worker", nats_password="synthetic-password")
+        self.client.is_connected = False
+        self.client.connect.side_effect = ConnectionError("synthetic auth failure")
+        with patch.object(application, "get_config", return_value=self.settings), self.assertRaises(ConnectionError):
+            await application.run(ready_event=self.ready)
+        self.client.connect.assert_awaited_once()
+        self.assertEqual(self.client.connect.await_args.kwargs["user"], "synthetic-worker")
+        self.assertFalse(self.ready.is_set())
+
     async def test_model_failure_happens_before_broker_connection(self):
         self.loader.side_effect = ValueError("synthetic model failure")
         self.ready.set()

@@ -36,14 +36,15 @@ def get_config(
         or ("public.pem" if py_env == "production" else f"public.{py_env}.pem"),
     }
     # Omission uses Pydantic's default; present empty/None/unknown values fail.
-    for field in ("auth_inference", "auth_rdkit_properties", "auth_rdkit_canonical_smiles",
+    for field in ("nats_username", "nats_password", "auth_inference", "auth_rdkit_properties", "auth_rdkit_canonical_smiles",
                   "auth_rdkit_same_structure", "auth_pubchem_iupac_name"):
         if field.upper() in values:
             raw[field] = values[field.upper()]
     try:
         return Configuration(**raw)
     except ValidationError as error:
-        fields = sorted({str(item["loc"][0]) for item in error.errors(include_input=False)})
+        fields = sorted({str(item["loc"][0]) if item["loc"] else "nats_credentials"
+                         for item in error.errors(include_input=False)})
         raise ConfigurationError("Invalid configuration fields: " + ", ".join(fields)) from None
 
 

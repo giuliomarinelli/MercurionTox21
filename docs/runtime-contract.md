@@ -43,7 +43,8 @@ not mutate `os.environ`. An explicit mapping and root directory can be supplied 
 | Input | Contract |
 | --- | --- |
 | `PY_ENV` | Exact lowercase `development`, `test`, `staging`, `production`; default `development`. Blank/unknown names fail before any dotenv lookup |
-| `NATS_URL` | Required nonblank string with `nats://` or `tls://`, host and valid optional port; no resource path/query/fragment. Credentials, if supplied, are not included in configuration errors or startup logs |
+| `NATS_URL` | Required nonblank string with `nats://` or `tls://`, host and valid optional port; no resource path/query/fragment or userinfo |
+| `NATS_USERNAME`, `NATS_PASSWORD` | Optional complete pair of non-empty strict strings; omission retains legacy. See the [broker auth update and URL migration](nats-client-auth.md) |
 | `VERSION` | Required nonblank string; `local-dev` is valid for local use, not an immutable release identity |
 | `JWT_PUBLIC_KEY_PATH` | Nonblank file path, default `public.<environment>.pem`, or `public.pem` in production. File read only when auth is enabled |
 

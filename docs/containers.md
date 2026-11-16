@@ -5,6 +5,10 @@ and `production` (default). All start `python -m main` as UID/GID `10021:10021`.
 `PY_ENV` selects the corresponding NATS namespace and configuration policy;
 runtime credentials and broker addresses are not build inputs.
 
+An [opt-in credential-file launcher](secret-file-bootstrap.md) is included as
+`python -m bootstrap_secrets`. Default CMD and all existing target behavior are
+preserved; the alternative is selected explicitly by a future runtime manifest.
+
 ## Build
 
 Use a clean source checkout and a separately exported, validated
@@ -23,9 +27,9 @@ Version must be nonblank and revision a complete 40-character Git SHA; labels
 record both and the source repository. These arguments do not establish a
 release or prove that a dirty checkout matches the supplied revision.
 
-The pinned Python 3.11.18/Debian 13 base and hash-locked Linux CPU dependency profiles
+The digest-pinned Wolfi/glibc base, Python 3.11.18 and hash-locked Linux CPU dependency profiles
 are shared. `test` additionally requires the validation stage to pass the
-107 self-contained unittest cases. Training dependencies and synthetic tests
+159 self-contained unittest cases. Training dependencies and synthetic tests
 exist only in that stage. All final images contain the same runtime code and
 exported package; the test target adds only a small test-completion marker.
 Every target validates and loads its package and runs a real CPU prediction

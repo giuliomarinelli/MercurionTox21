@@ -1,8 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "owner": "repository-owner",
-  "web_policy_source": "https://github.com/giuliomarinelli/MercurionWeb/blob/cbd7ccecf265ddda6dcefdf0325c2cc72cf159df/docs/supply-chain-policy.json",
-  "blocking_severities": ["CRITICAL"],
+  "web_policy_source": "https://github.com/giuliomarinelli/MercurionWeb/blob/d2d328152a928b4960412c4abf138cbfbbf01913/docs/supply-chain-policy.json",
+  "blocking_severities": ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"],
+  "dependency_scopes": ["legacy", "runtime", "training", "build"],
   "exceptions": [],
   "scanner": "aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
 }

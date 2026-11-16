@@ -1,17 +1,21 @@
 # syntax=docker/dockerfile:1
 # Linux amd64 CPU. Supply --build-context model_package=<exported package directory>.
-FROM python:3.11.18-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS runtime-dependencies
+FROM cgr.dev/chainguard/wolfi-base@sha256:b7787f1d3f29dcfb48730372d3515391ac3b218723201a765c94949922676099 AS python-base
+RUN apk add --no-cache python-3.11=3.11.18-r1 libstdc++=16.2.0-r3 libgomp=16.2.0-r3
+
+FROM python-base AS runtime-dependencies
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY requirements/build-linux-cpu.lock requirements/runtime-linux-cpu.lock ./
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/python -m pip install --require-hashes -r build-linux-cpu.lock && \
+RUN apk add --no-cache py3.11-pip=26.2.2-r2 && \
+    python -m venv /opt/venv && \
+    /opt/venv/bin/python -m pip install --require-hashes --force-reinstall -r build-linux-cpu.lock && \
     /opt/venv/bin/python -m pip install --require-hashes --no-build-isolation -r runtime-linux-cpu.lock && \
     /opt/venv/bin/python -m pip check
 
 FROM runtime-dependencies AS runtime-source
 WORKDIR /app
-COPY main.py config.py runtime.py ./
+COPY main.py config.py runtime.py secret_bootstrap.py bootstrap_secrets.py ./
 COPY api/__init__.py api/inference.py api/rdkit.py api/pcp.py ./api/
 COPY schemas/__init__.py schemas/schemas.py ./schemas/
 COPY mercurion/__init__.py mercurion/model.py mercurion/model_spec.py mercurion/labels.py \
@@ -24,11 +28,11 @@ RUN /opt/venv/bin/python -m pip install --require-hashes --no-build-isolation -r
 COPY mercurion/calibration.py mercurion/export_model.py mercurion/train.py \
      mercurion/preprocessing.py mercurion/early_stopping.py mercurion/focal_loss.py ./mercurion/
 COPY tests ./tests
-COPY scripts/run_tests.py scripts/container_evidence.py ./scripts/
+COPY scripts/run_tests.py scripts/container_evidence.py scripts/check_source_security.py ./scripts/
 RUN /opt/venv/bin/python -B scripts/run_tests.py all && \
     /opt/venv/bin/python -c "from pathlib import Path; Path('/build/tests-passed').write_text('Self-contained unittest groups passed\n')"
 
-FROM python:3.11.18-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS runtime
+FROM python-base AS runtime
 ARG BUILD_VERSION
 ARG BUILD_REVISION
 LABEL org.opencontainers.image.source="https://github.com/giuliomarinelli/MercurionTox21" \
@@ -37,15 +41,14 @@ LABEL org.opencontainers.image.source="https://github.com/giuliomarinelli/Mercur
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp XDG_CACHE_HOME=/tmp/.cache TMPDIR=/tmp MODEL_PACKAGE_DIR=/app/model VERSION=$BUILD_VERSION
 RUN python -c "import os,re; assert os.environ.get('BUILD_VERSION','').strip(), 'BUILD_VERSION required'; assert re.fullmatch('[0-9a-fA-F]{40}', os.environ.get('BUILD_REVISION','')), 'Full BUILD_REVISION required'" && \
-    groupadd --gid 10021 mercurion && \
-    useradd --uid 10021 --gid 10021 --no-create-home --shell /usr/sbin/nologin mercurion
+    addgroup -g 10021 -S mercurion && \
+    adduser -u 10021 -G mercurion -S -D -H -s /bin/false mercurion
 WORKDIR /app
 COPY --from=runtime-dependencies /opt/venv /opt/venv
 RUN python -c "import json,os,pathlib; p=pathlib.Path('/usr/share/mercurion'); p.mkdir(parents=True,exist_ok=True); (p/'build-identity.json').write_text(json.dumps({'version':os.environ['BUILD_VERSION'],'revision':os.environ['BUILD_REVISION'].lower(),'source':'https://github.com/giuliomarinelli/MercurionTox21'}))"
 COPY --from=runtime-source /app /app
 COPY --from=model_package /weights.pt /thresholds.json /manifest.json ./model/
-RUN rm -rf /opt/venv/lib/python3.11/site-packages/pip /opt/venv/lib/python3.11/site-packages/pip-*.dist-info /opt/venv/bin/pip* \
-           /usr/local/lib/python3.11/site-packages/pip /usr/local/lib/python3.11/site-packages/pip-*.dist-info /usr/local/bin/pip* && \
+RUN rm -rf /opt/venv/lib/python3.11/site-packages/pip /opt/venv/lib/python3.11/site-packages/pip-*.dist-info /opt/venv/bin/pip* && \
     chmod 0555 /app/model && chmod 0444 /app/model/weights.pt /app/model/thresholds.json /app/model/manifest.json
 USER 10021:10021
 RUN python -c "from runtime import load_inference_runtime; m,d,p=load_inference_runtime(package_dir='/app/model'); r=p('CCO',m,d); assert len(r)==4 and all(0<=v['probability']<=1 for v in r.values())"

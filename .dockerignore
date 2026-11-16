@@ -5,6 +5,8 @@
 !main.py
 !config.py
 !runtime.py
+!secret_bootstrap.py
+!bootstrap_secrets.py
 !requirements/
 !requirements/*-linux-cpu.lock
 !api/
@@ -22,6 +24,7 @@
 !scripts/
 !scripts/run_tests.py
 !scripts/container_evidence.py
+!scripts/check_source_security.py
 **/__pycache__/**
 **/*.pyc
 **/.env*
