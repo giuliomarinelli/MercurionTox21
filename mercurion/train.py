@@ -1,12 +1,19 @@
+# Load Torch before sklearn's native libraries to avoid Windows DLL conflicts.
+import torch
 from sklearn.metrics import f1_score, roc_auc_score
 import numpy as np
-import torch
 from torch.utils.data import DataLoader, TensorDataset
 from mercurion.model import MercurionMLP
 from mercurion.early_stopping import EarlyStopping
 from mercurion.focal_loss import FocalLoss
+from mercurion.labels import tox21_labels
+from mercurion.model_spec import MODEL_SPEC
 import json
 import random
+
+
+from mercurion.calibration import find_best_threshold, find_per_label_thresholds
+
 
 SEED = 42
 
@@ -19,10 +26,17 @@ torch.backends.cudnn.benchmark = False
 
 
 def load_data(batch_size=64):
-    X_train = np.load('data/processed/X_train.npy')
-    y_train = np.load('data/processed/y_train.npy')
-    X_val = np.load('data/processed/X_val.npy')
-    y_val = np.load('data/processed/y_val.npy')
+    X_train = np.load('data/processed/X_train.npy', allow_pickle=False)
+    y_train = np.load('data/processed/y_train.npy', allow_pickle=False)
+    X_val = np.load('data/processed/X_val.npy', allow_pickle=False)
+    y_val = np.load('data/processed/y_val.npy', allow_pickle=False)
+
+    for features, targets in ((X_train, y_train), (X_val, y_val)):
+        if (features.ndim != 2 or features.shape[0] == 0
+                or features.shape[1] != MODEL_SPEC['input_dim']
+                or targets.shape != (features.shape[0], len(tox21_labels))
+                or not np.isin(features, [0, 1]).all() or not np.isin(targets, [0, 1]).all()):
+            raise ValueError('Expected nonempty binary features and twelve aligned binary labels')
 
     X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train, dtype=torch.float32)
@@ -39,6 +53,9 @@ def load_data(batch_size=64):
 
 
 def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    if epochs <= 0:
+        raise ValueError("epochs must be greater than zero")
+    best_thresh = 0.5
     print(f"Using device: {device}")
     train_loader, val_loader = load_data()
 
@@ -97,28 +114,9 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
         except ValueError:
             roc_auc = float('nan')  # nel caso in cui non ci siano esempi positivi
 
-        def find_best_threshold(y_true, y_probs):
-            thresholds = np.arange(0.1, 0.9, 0.05)
-            best_f1 = 0
-            best_thresh = 0.5
-            for t in thresholds:
-                y_pred = (y_probs > t).astype(int)
-                f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
-                if f1 > best_f1:
-                    best_f1 = f1
-                    best_thresh = t
-            return best_thresh, best_f1
-
-        top4_labels = ['SR-ATAD5', 'NR-AhR', 'SR-MMP', 'SR-p53']
-        per_label_thresholds = {}
-        
-        for i, label in enumerate(top4_labels):
-            bt, _ = find_best_threshold(all_targets[:, i], all_probs[:, i])
-            per_label_thresholds[label] = bt
+        per_label_thresholds = find_per_label_thresholds(all_targets, all_probs)
         
         print("Threshold per label:", per_label_thresholds)
-        with open("outputs/best_thresholds.json", "w") as f:
-            json.dump({"per_label_thresholds": per_label_thresholds}, f, indent=2)
 
 
         best_thresh, best_f1_macro = find_best_threshold(all_targets, all_probs)
@@ -133,6 +131,21 @@ def train_model(epochs=20, lr=1e-3, device='cuda' if torch.cuda.is_available() e
         if early_stopper.early_stop:
             print("🛑 Stopping early")
             break
+
+    # Final calibration uses the selected checkpoint, never the last in-memory epoch.
+    model.load_state_dict(torch.load(early_stopper.path, map_location=device, weights_only=True))
+    model.eval()
+    best_targets, best_probabilities = [], []
+    with torch.no_grad():
+        for features, targets in val_loader:
+            best_targets.append(targets.cpu().numpy())
+            best_probabilities.append(torch.sigmoid(model(features.to(device))).cpu().numpy())
+    selected_targets = np.concatenate(best_targets)
+    selected_probabilities = np.concatenate(best_probabilities)
+    best_thresh, _ = find_best_threshold(selected_targets, selected_probabilities)
+    per_label_thresholds = find_per_label_thresholds(selected_targets, selected_probabilities)
+    with open("outputs/best_thresholds.json", "w") as f:
+        json.dump({"per_label_thresholds": per_label_thresholds}, f, indent=2)
 
     with open('outputs/best_threshold.json', 'w') as f:
         json.dump({'best_threshold': float(best_thresh)}, f)

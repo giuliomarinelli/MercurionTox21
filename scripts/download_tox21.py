@@ -1,9 +1,9 @@
-import deepchem as dc
+from deepchem.molnet import load_tox21
 import pandas as pd
 
 def download_tox21(output_path='data/raw/tox21.csv'):
     print("Download dataset Tox21")
-    tox21_tasks, datasets, _ = dc.molnet.load_tox21(featurizer='Raw', split='random')
+    tox21_tasks, datasets, _ = load_tox21(featurizer='Raw', split='random')
     train_dataset, _, _ = datasets
 
     df = pd.DataFrame({
