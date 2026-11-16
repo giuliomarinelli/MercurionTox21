@@ -5,9 +5,9 @@ contourpy==1.1.1
 cryptography==50.0.0
 cycler==0.12.1
 deepchem==2.8.0
-filelock==3.20.3
+filelock==4.2.1
 fonttools==4.60.2
-fsspec==2025.3.0
+fsspec==2026.6.0
 importlib_resources==6.4.5
 Jinja2==3.1.6
 joblib==1.4.2
@@ -20,7 +20,7 @@ networkx==3.1
 numpy==1.24.4
 packaging==24.2
 pandas==2.0.3
-pillow==12.3.0
+pillow==13.0.0
 pycparser==3.0
 pydantic==2.10.6
 pydantic-settings==2.11.0
@@ -28,7 +28,8 @@ pydantic_core==2.27.2
 pyparsing==3.1.4
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-PyJWT==2.13.0
+PubChemPy==1.0.5
+PyJWT==2.15.1
 pytz==2025.1
 rdkit==2024.3.5
 scikit-learn==1.5.0
@@ -40,4 +41,5 @@ torch==2.13.0
 typing-inspection==0.4.2
 typing_extensions==4.16.0
 tzdata==2025.2
+urllib3==2.8.0
 zipp==3.20.2
